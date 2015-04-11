@@ -1,23 +1,25 @@
 class TestCWR_LightningGunWeapon extends UTWeap_SniperRifle;
 
-simulated function SetSkin(Material NewMaterial)
-{
-	local int i, Cnt;
-	local MaterialInstanceConstant MIC;
-	Cnt = Mesh.Materials.Length;
-	for ( i=0; i < Cnt || Cnt == 0; i++ )
-	{
-		Mesh.SetMaterial(i, MaterialInterface'Engine_MI_Shaders.Instances.M_ES_Phong_Opaque_INST_01');
-		MIC = Mesh.CreateAndSetMaterialInstanceConstant(i);
-		MIC.SetVectorParameterValue('Diffuse_01_Color', MakeLinearColor(1.0, 1.0, 0.0, 1.0));
-		if (Cnt == 0) break;
-	}
-}
-
 DefaultProperties
 {
-	ItemName="Lightning Gun"
-	PickupMessage="Lightning Gun"
+	Begin Object Class=MaterialInstanceConstant Name=MyMaterialInstance
+		Parent=MaterialInterface'Engine_MI_Shaders.Instances.M_ES_Phong_Opaque_INST_01'
+		VectorParameterValues.Add((ParameterName="Diffuse_01_Color",ParameterValue=(R=1.0,G=1.0,B=0.0,A=1.0)))
+	End Object
+
+	Begin Object Name=FirstPersonMesh
+	    Materials(0)=MyMaterialInstance
+	End Object
+
+	Begin Object Name=PickupMesh
+		Materials(0)=MyMaterialInstance
+	End Object
+
+	TeamSkins[0]=MyMaterialInstance
+	TeamSkins[1]=MyMaterialInstance
 
 	AttachmentClass=class'TestCWR_LightningGunAttachment'
+
+	ItemName="Lightning Gun"
+	PickupMessage="Lightning Gun"
 }
