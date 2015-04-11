@@ -1,4 +1,4 @@
-class TestCWR_RailGunWeapon extends UTWeap_ShockRifle;
+class TestCWR_RailGunAttachment extends UTAttachment_ShockRifle;
 
 simulated function SetSkin(Material NewMaterial)
 {
@@ -14,10 +14,6 @@ simulated function SetSkin(Material NewMaterial)
 	}
 }
 
-Defaultproperties
+DefaultProperties
 {
-	ItemName="Rail Gun"
-	PickupMessage="Rail Gun"
-
-	AttachmentClass=class'TestCWR_RailGunAttachment'
 }
