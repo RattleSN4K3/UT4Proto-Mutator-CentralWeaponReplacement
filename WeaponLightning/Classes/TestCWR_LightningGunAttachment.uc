@@ -1,4 +1,4 @@
-class TestCWR_LightningGunWeapon extends UTWeap_SniperRifle;
+class TestCWR_LightningGunAttachment extends UTAttachment_SniperRifle;
 
 simulated function SetSkin(Material NewMaterial)
 {
@@ -16,8 +16,4 @@ simulated function SetSkin(Material NewMaterial)
 
 DefaultProperties
 {
-	ItemName="Lightning Gun"
-	PickupMessage="Lightning Gun"
-
-	AttachmentClass=class'TestCWR_LightningGunAttachment'
 }
