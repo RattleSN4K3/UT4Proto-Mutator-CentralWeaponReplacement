@@ -1,23 +1,22 @@
 class TestCWR_RailGunWeapon extends UTWeap_ShockRifle;
 
-simulated function SetSkin(Material NewMaterial)
-{
-	local int i, Cnt;
-	local MaterialInstanceConstant MIC;
-	Cnt = Mesh.Materials.Length;
-	for ( i=0; i < Cnt || Cnt == 0; i++ )
-	{
-		Mesh.SetMaterial(i, MaterialInterface'Engine_MI_Shaders.Instances.M_ES_Phong_Opaque_INST_01');
-		MIC = Mesh.CreateAndSetMaterialInstanceConstant(i);
-		MIC.SetVectorParameterValue('Diffuse_01_Color', MakeLinearColor(1.0, 1.0, 1.0, 1.0));
-		if (Cnt == 0) break;
-	}
-}
-
 Defaultproperties
 {
-	ItemName="Rail Gun"
-	PickupMessage="Rail Gun"
+	Begin Object Class=MaterialInstanceConstant Name=MyMaterialInstance
+		Parent=MaterialInterface'Engine_MI_Shaders.Instances.M_ES_Phong_Opaque_INST_01'
+		VectorParameterValues.Add((ParameterName="Diffuse_01_Color",ParameterValue=(R=1.0,G=1.0,B=1.0,A=1.0)))
+	End Object
+
+	Begin Object Name=FirstPersonMesh
+	    Materials(0)=MyMaterialInstance
+	End Object
+
+	Begin Object Name=PickupMesh
+		Materials(0)=MyMaterialInstance
+	End Object
 
 	AttachmentClass=class'TestCWR_RailGunAttachment'
+
+	ItemName="Rail Gun"
+	PickupMessage="Rail Gun"
 }
