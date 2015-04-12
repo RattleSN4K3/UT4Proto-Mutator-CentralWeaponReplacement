@@ -17,6 +17,9 @@ struct ReplacementOptionsInfo
 	var bool bAddToLocker;
 	/** Whether to add the class to the default inventory (on spawn) */
 	var bool bAddToDefault;
+
+	/** Whether to prevent replacing default inventory items (to be used with bSubclasses=true) */
+	var bool bNoDefaultInventory;
 	
 	structdefaultproperties
 	{
@@ -24,6 +27,7 @@ struct ReplacementOptionsInfo
 		bSubclasses=false
 		bAddToLocker=false
 		bAddToDefault=false
+		bNoDefaultInventory=false
 	}
 };
 
@@ -90,6 +94,8 @@ var array<HashedMutatorInfo> HashedMutators;
 var array<HashedWeaponInfo> HashedWeapons;
 var array<HashedAmmoInfo> HashedAmmos;
 
+var array<int> EnforcerIndizes;
+
 // UI
 // ------------
 
@@ -153,7 +159,6 @@ function InitMutator(string Options, out string ErrorMessage)
 	{
 		for (j=0; j<WeaponsToReplace.Length; j++)
 		{
-			WeaponClass = none;
 			for (i=0; i<G.DefaultInventory.length; i++)
 			{
 				if (G.DefaultInventory[i] == None) continue;
@@ -162,25 +167,30 @@ function InitMutator(string Options, out string ErrorMessage)
 				// IsA doesn't work for abstract classes, we need to use the workaround/hackfix
 				if (WeaponsToReplace[j].Options.bSubclasses && !IsSubClass(G.DefaultInventory[i], WeaponsToReplace[j].OldClassName)) continue;
 
-				if (!ClassPathValid(WeaponsToReplace[j].NewClassPath))
+				if (WeaponsToReplace[j].Options.bReplaceWeapon && !WeaponsToReplace[j].Options.bNoDefaultInventory)
 				{
-					// replace with nothing
-					G.DefaultInventory.Remove(i, 1);
-					i--;
-					continue;
-				}
-				else
-				{
-					WeaponClass = class<UTWeapon>(DynamicLoadObject(WeaponsToReplace[j].NewClassPath, class'Class'));
-					if (WeaponsToReplace[j].Options.bReplaceWeapon)
+					if (!ClassPathValid(WeaponsToReplace[j].NewClassPath))
 					{
-						G.DefaultInventory[i] = WeaponClass;
+						// replace with nothing
+						G.DefaultInventory.Remove(i, 1);
+						i--;
+						continue;
 					}
-					else if (WeaponsToReplace[j].Options.bAddToDefault)
+					else
 					{
-						G.DefaultInventory.AddItem(WeaponClass);
+						WeaponClass = class<UTWeapon>(DynamicLoadObject(WeaponsToReplace[j].NewClassPath, class'Class'));
+						if (WeaponsToReplace[j].Options.bReplaceWeapon)
+						{
+							G.DefaultInventory[i] = WeaponClass;
+						}
 					}
 				}
+			}
+
+			if (WeaponsToReplace[j].Options.bAddToDefault && ClassPathValid(WeaponsToReplace[j].NewClassPath))
+			{
+				WeaponClass = class<UTWeapon>(DynamicLoadObject(WeaponsToReplace[j].NewClassPath, class'Class'));
+				if (WeaponClass != none) G.DefaultInventory.AddItem(WeaponClass);
 			}
 
 			if (WeaponsToReplace[j].Options.bAddToLocker)
@@ -204,6 +214,15 @@ function InitMutator(string Options, out string ErrorMessage)
 				{
 					G.TranslocatorClass = class<UTWeapon>(DynamicLoadObject(WeaponsToReplace[j].NewClassPath, class'Class'));
 				}
+			}
+		}
+
+		EnforcerIndizes.Length = 0;
+		for (i=0; i<G.DefaultInventory.length; i++)
+		{
+			if (IsSubClass(G.DefaultInventory[i], 'UTWeap_Enforcer'))
+			{
+				EnforcerIndizes.AddItem(i);
 			}
 		}
 	}
@@ -290,9 +309,47 @@ function bool CheckReplacement(Actor Other)
 				}
 			}
 		}
+
+		// remove initial anim for Enforcers (may only work on server/listen player)
+		else if (EnforcerIndizes.Length > 1 && UTWeap_Enforcer(Other) != none)
+		{
+			UTWeap_Enforcer(Other).bLoaded = true;
+			UTWeap_Enforcer(Other).EquipTime = UTWeap_Enforcer(Other).ReloadTime;
+		}
 	}
 
 	return true;
+}
+
+/* called by GameInfo.RestartPlayer()
+	change the players jumpz, etc. here
+*/
+function ModifyPlayer(Pawn Other)
+{
+	local int i, index;
+	local UTWeap_Enforcer Enf;
+	super.ModifyPlayer(Other);
+
+	// special case for Akimbo (Enforcer only)
+	if (EnforcerIndizes.Length > 1 && UTGame(WorldInfo.Game) != none)
+	{
+		index = EnforcerIndizes[0];
+		Enf = UTWeap_Enforcer(Other.FindInventoryType(UTGame(WorldInfo.Game).DefaultInventory[0]));
+		if (Enf != none)
+		{
+			for (i=1; i<EnforcerIndizes.Length; i++)
+			{
+				index = EnforcerIndizes[i];
+				if (index < UTGame(WorldInfo.Game).DefaultInventory.Length)
+				{
+					if (!Enf.DenyPickupQuery(UTGame(WorldInfo.Game).DefaultInventory[index], none))
+					{
+						Other.CreateInventory(UTGame(WorldInfo.Game).DefaultInventory[index], false);
+					}
+				}
+			}
+		}
+	}
 }
 
 // called when gameplay actually starts
