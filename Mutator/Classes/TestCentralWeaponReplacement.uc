@@ -1,4 +1,4 @@
-class TestCentralWeaponReplacement extends UTMutator_WeaponReplacement
+class TestCentralWeaponReplacement extends UTMutator
 	config(TestCentralWeaponReplacement);
 
 const DialogDefaultColor = "<color:R=1,G=1,B=1,A=1>";
@@ -7,9 +7,39 @@ const DialogDefaultColor = "<color:R=1,G=1,B=1,A=1>";
 // Structs
 //**********************************************************************************
 
+struct ReplacementOptionsInfo
+{
+	/** Whether to replace/remove the class name */
+	var bool bReplaceWeapon;
+	/** Whether to check for subclasses  */
+	var bool bSubclasses;
+	/** Whether to add the class to the weapon lockers */
+	var bool bAddToLocker;
+	/** Whether to add the class to the default inventory (on spawn) */
+	var bool bAddToDefault;
+	
+	structdefaultproperties
+	{
+		bReplaceWeapon=true
+		bSubclasses=false
+		bAddToLocker=false
+		bAddToDefault=false
+	}
+};
+
 struct ReplacementInfoEx
 {
-	var Object Registrar;
+	/** class name of the weapon we want to get rid of */
+	var name OldClassName;
+	/** fully qualified path of the class to replace it with */
+	var string NewClassPath;
+	
+	/** the options for this item */
+	var ReplacementOptionsInfo Options;
+
+	/** the mutator/object which has registered the replacement
+	(might be none if set by default configuration) */
+	var transient Object Registrar;
 };
 
 struct ErrorMessageInfo
@@ -47,14 +77,14 @@ struct HashedAmmoInfo
 // Config
 // ------------
 
-var config array<ReplacementInfo> DefaultWeaponsToReplace;
-var config array<ReplacementInfo> DefaultAmmoToReplace;
+var config array<ReplacementInfoEx> DefaultWeaponsToReplace;
+var config array<ReplacementInfoEx> DefaultAmmoToReplace;
 
 // Workflow
 // ------------
 
-var array<ReplacementInfoEx> WeaponsToReplaceEx;
-var array<ReplacementInfoEx> AmmoToReplaceEx;
+var array<ReplacementInfoEx> WeaponsToReplace;
+var array<ReplacementInfoEx> AmmoToReplace;
 
 var array<HashedMutatorInfo> HashedMutators;
 var array<HashedWeaponInfo> HashedWeapons;
@@ -97,11 +127,172 @@ event PreBeginPlay()
 		AmmoToReplace.Length = 0;
 
 		for (i=0; i<DefaultWeaponsToReplace.Length; i++)
-			RegisterWeaponReplacement(none, DefaultWeaponsToReplace[i].OldClassName, DefaultWeaponsToReplace[i].NewClassPath, false);
+			RegisterWeaponReplacement(none, DefaultWeaponsToReplace[i].OldClassName, DefaultWeaponsToReplace[i].NewClassPath, false, DefaultWeaponsToReplace[i].Options);
 
 		for (i=0; i<DefaultAmmoToReplace.Length; i++)
-			RegisterWeaponReplacement(none, DefaultAmmoToReplace[i].OldClassName, DefaultAmmoToReplace[i].NewClassPath, true);
+			RegisterWeaponReplacement(none, DefaultAmmoToReplace[i].OldClassName, DefaultAmmoToReplace[i].NewClassPath, true, DefaultAmmoToReplace[i].Options);
 	}
+}
+
+/**
+ * This function can be used to parse the command line parameters when a server
+ * starts up
+ */
+
+function InitMutator(string Options, out string ErrorMessage)
+{
+	local int i, j;
+	local UTGame G;
+	local class<UTWeapon> WeaponClass;
+
+	super.InitMutator(Options, ErrorMessage);
+
+	// Make sure the game does not hold a null reference
+	G = UTGame(WorldInfo.Game);
+	if(G != none)
+	{
+		for (j=0; j<WeaponsToReplace.Length; j++)
+		{
+			WeaponClass = none;
+			for (i=0; i<G.DefaultInventory.length; i++)
+			{
+				if (G.DefaultInventory[i] == None) continue;
+				if (!WeaponsToReplace[j].Options.bSubclasses && G.DefaultInventory[i].Name != WeaponsToReplace[j].OldClassName) continue;
+
+				// IsA doesn't work for abstract classes, we need to use the workaround/hackfix
+				if (WeaponsToReplace[j].Options.bSubclasses && !IsSubClass(G.DefaultInventory[i], WeaponsToReplace[j].OldClassName)) continue;
+
+				if (!ClassPathValid(WeaponsToReplace[j].NewClassPath))
+				{
+					// replace with nothing
+					G.DefaultInventory.Remove(i, 1);
+					i--;
+					continue;
+				}
+				else
+				{
+					WeaponClass = class<UTWeapon>(DynamicLoadObject(WeaponsToReplace[j].NewClassPath, class'Class'));
+					if (WeaponsToReplace[j].Options.bReplaceWeapon)
+					{
+						G.DefaultInventory[i] = WeaponClass;
+					}
+					else if (WeaponsToReplace[j].Options.bAddToDefault)
+					{
+						G.DefaultInventory.AddItem(WeaponClass);
+					}
+				}
+			}
+
+			if (WeaponsToReplace[j].Options.bAddToLocker)
+			{
+				WeaponClass = class<UTWeapon>(DynamicLoadObject(WeaponsToReplace[j].NewClassPath, class'Class'));
+				AddToLocker(WeaponClass);
+			}
+		}
+
+		if (G.TranslocatorClass != None)
+		{
+			j = WeaponsToReplace.Find('OldClassName', G.TranslocatorClass.Name);
+			if (j != INDEX_NONE)
+			{
+				if (WeaponsToReplace[j].NewClassPath == "" || !WeaponsToReplace[j].Options.bReplaceWeapon)
+				{
+					// replace with nothing
+					G.TranslocatorClass = None;
+				}
+				else
+				{
+					G.TranslocatorClass = class<UTWeapon>(DynamicLoadObject(WeaponsToReplace[j].NewClassPath, class'Class'));
+				}
+			}
+		}
+	}
+}
+
+function bool CheckReplacement(Actor Other)
+{
+	local UTWeaponPickupFactory WeaponPickup;
+	local UTWeaponLocker Locker;
+	local UTAmmoPickupFactory AmmoPickup, NewAmmo;
+	local int i, Index;
+	local class<UTAmmoPickupFactory> NewAmmoClass;
+
+	WeaponPickup = UTWeaponPickupFactory(Other);
+	if (WeaponPickup != None)
+	{
+		if (WeaponPickup.WeaponPickupClass != None)
+		{
+			if (ShouldBeReplaced(index, WeaponPickup.WeaponPickupClass, false) && WeaponsToReplace[index].Options.bReplaceWeapon)
+			{
+				if (WeaponsToReplace[index].NewClassPath == "")
+				{
+					// replace with nothing
+					return false;
+				}
+				WeaponPickup.WeaponPickupClass = class<UTWeapon>(DynamicLoadObject(WeaponsToReplace[index].NewClassPath, class'Class'));
+				WeaponPickup.InitializePickup();
+			}
+		}
+	}
+	else
+	{
+		if (UTWeaponLocker(Other) != None)
+		{
+			Locker = UTWeaponLocker(Other);
+			for (i = 0; i < Locker.Weapons.length; i++)
+			{
+				if (Locker.Weapons[i].WeaponClass != none && ShouldBeReplaced(index, Locker.Weapons[i].WeaponClass, false) && WeaponsToReplace[index].Options.bReplaceWeapon)
+				{
+					if (WeaponsToReplace[index].NewClassPath == "")
+					{
+						// replace with nothing
+						Locker.ReplaceWeapon(i, None);
+					}
+					else
+					{
+						Locker.ReplaceWeapon(i, class<UTWeapon>(DynamicLoadObject(WeaponsToReplace[index].NewClassPath, class'Class')));
+					}
+				}
+			}
+		}
+		else if (UTAmmoPickupFactory(Other) != none)
+		{
+			AmmoPickup = UTAmmoPickupFactory(Other);
+			if (AmmoPickup.Class != none)
+			{
+				if (ShouldBeReplaced(index, AmmoPickup.Class, true) && AmmoToReplace[index].Options.bReplaceWeapon)
+				{
+					if (AmmoToReplace[index].NewClassPath == "")
+					{
+						// replace with nothing
+						return false;
+					}
+					NewAmmoClass = class<UTAmmoPickupFactory>(DynamicLoadObject(AmmoToReplace[index].NewClassPath, class'Class'));
+					if (NewAmmoClass == None)
+					{
+						// replace with nothing
+						return false;
+					}
+					else if (NewAmmoClass.default.bStatic || NewAmmoClass.default.bNoDelete)
+					{
+						// transform the current ammo into the desired class
+						AmmoPickup.TransformAmmoType(NewAmmoClass);
+						return true;
+					}
+					else
+					{
+						// spawn the new ammo, link it to the old, then disable the old one
+						NewAmmo = AmmoPickup.Spawn(NewAmmoClass);
+						NewAmmo.OriginalFactory = AmmoPickup;
+						AmmoPickup.ReplacementFactory = NewAmmo;
+						return false;
+					}
+				}
+			}
+		}
+	}
+
+	return true;
 }
 
 // called when gameplay actually starts
@@ -145,7 +336,7 @@ simulated function String GetHumanReadableName()
 // Interface functions
 //**********************************************************************************
 
-function RegisterWeaponReplacement(Object Registrar, name OldClassName, string NewClassPath, bool bAmmo)
+function RegisterWeaponReplacement(Object Registrar, name OldClassName, string NewClassPath, bool bAmmo, ReplacementOptionsInfo ReplacementOptions)
 {
 	local int index;
 
@@ -157,24 +348,24 @@ function RegisterWeaponReplacement(Object Registrar, name OldClassName, string N
 	{
 		if (IsNewItem(AmmoToReplace, index, OldClassName))
 		{
-			AddWeaponReplacement(true, Registrar, OldClassName, NewClassPath);
+			AddWeaponReplacement(true, Registrar, OldClassName, NewClassPath, ReplacementOptions);
 		}
 		else if (!(AmmoToReplace[index].NewClassPath ~= NewClassPath))
 		{
-			AddErrorMessage(AmmoToReplaceEx[index].Registrar, Registrar, OldClassName, NewClassPath);
+			AddErrorMessage(AmmoToReplace[index].Registrar, Registrar, OldClassName, NewClassPath);
 		}
 	}
 	else if (IsNewItem(WeaponsToReplace, index, OldClassName))
 	{
-		AddWeaponReplacement(false, Registrar, OldClassName, NewClassPath);
+		AddWeaponReplacement(false, Registrar, OldClassName, NewClassPath, ReplacementOptions);
 	}
 	else if (!(WeaponsToReplace[index].NewClassPath ~= NewClassPath))
 	{
-		AddErrorMessage(WeaponsToReplaceEx[index].Registrar, Registrar, OldClassName, NewClassPath);
+		AddErrorMessage(WeaponsToReplace[index].Registrar, Registrar, OldClassName, NewClassPath);
 	}
 }
 
-static function bool StaticRegisterWeaponReplacement(Object Registrar, coerce name OldClassName, string NewClassPath, bool bAmmo, optional bool bSilent, optional out string ErrorMessage)
+static function bool StaticRegisterWeaponReplacement(Object Registrar, coerce name OldClassName, string NewClassPath, bool bAmmo, optional ReplacementOptionsInfo ReplacementOptions, optional bool bSilent, optional out string ErrorMessage)
 {
 	local WorldInfo WI;
 	local TestCentralWeaponReplacement mut;
@@ -212,7 +403,7 @@ static function bool StaticRegisterWeaponReplacement(Object Registrar, coerce na
 	}
 
 	// register the weapon replacement
-	mut.RegisterWeaponReplacement(Registrar, OldClassName, NewClassPath, bAmmo);
+	mut.RegisterWeaponReplacement(Registrar, OldClassName, NewClassPath, bAmmo, ReplacementOptions);
 	return true;
 }
 
@@ -220,29 +411,16 @@ static function bool StaticRegisterWeaponReplacement(Object Registrar, coerce na
 // Private functions
 //**********************************************************************************
 
-private function AddWeaponReplacement(bool bAmmo, Object Registrar, name OldClassName, string NewClassPath)
+private function AddWeaponReplacement(bool bAmmo, Object Registrar, name OldClassName, string NewClassPath, ReplacementOptionsInfo ReplacementOptions)
 {
-	local int i;
-	local ReplacementInfo base;
-	local ReplacementInfoEx ex;
-	base.OldClassName = OldClassName;
-	base.NewClassPath = NewClassPath;
-	ex.Registrar = Registrar;
+	local ReplacementInfoEx item;
+	item.OldClassName = OldClassName;
+	item.NewClassPath = NewClassPath;
+	item.Registrar = Registrar;
+	item.Options = ReplacementOptions;
 
-	if (bAmmo)
-	{
-		i = AmmoToReplace.Length;
-		AmmoToReplaceEx.Length = i;
-		AmmoToReplace[i] = base;
-		AmmoToReplaceEx[i] = ex;
-	}
-	else
-	{
-		i = WeaponsToReplace.Length;
-		WeaponsToReplaceEx.Length = i;
-		WeaponsToReplace[i] = base;
-		WeaponsToReplaceEx[i] = ex;
-	}
+	if (bAmmo) AmmoToReplace.AddItem(item);
+	else WeaponsToReplace.AddItem(item);
 }
 
 private function AddErrorMessage(Object Conflicting, Object Registrar, name OldClassName, string NewClassPath)
@@ -328,11 +506,69 @@ private function LoadWeapons()
 	}
 }
 
+function AddToLocker(class<UTWeapon> WeaponClass)
+{
+	local UTWeaponLocker Locker;
+	local WeaponEntry ent;
+
+	if (WeaponClass == none)
+		return;
+
+	foreach DynamicActors(class'UTWeaponLocker', Locker)
+	{
+		ent.WeaponClass = WeaponClass;
+		Locker.MaxDesireability += WeaponClass.Default.AIRating;
+
+		//if (WeaponClass.default.PickupFactoryMesh != none)
+		//	ent.PickupMesh = WeaponClass.default.PickupFactoryMesh;
+
+		Locker.Weapons.AddItem(ent);
+	}
+}
+
+function bool ShouldBeReplaced(out int index, class ClassToCheck, bool bAmmo)
+{
+	local int i;
+	if (bAmmo)
+	{
+		index = AmmoToReplace.Find('OldClassName', ClassToCheck.Name);
+		if (index == INDEX_NONE)
+		{
+			for (i=0; i<AmmoToReplace.Length; i++)
+			{
+				
+				if (AmmoToReplace[i].Options.bSubclasses && IsSubClass(ClassToCheck, AmmoToReplace[i].OldClassName))
+				{
+					index = i;
+					return true;
+				}
+			}
+		}
+	}
+	else
+	{
+		index = WeaponsToReplace.Find('OldClassName', ClassToCheck.Name);
+		if (index == INDEX_NONE)
+		{
+			for (i=0; i<WeaponsToReplace.Length; i++)
+			{
+				if (WeaponsToReplace[i].Options.bSubclasses && IsSubClass(ClassToCheck, WeaponsToReplace[i].OldClassName))
+				{
+					index = i;
+					return true;
+				}
+			}
+		}
+	}
+
+	return index != INDEX_NONE;
+}
+
 //**********************************************************************************
 // Helper functions
 //**********************************************************************************
 
-function bool IsNewItem(out array<ReplacementInfo> items, out int index, name ClassName)
+function bool IsNewItem(out array<ReplacementInfoEx> items, out int index, name ClassName)
 {
 	index = items.Find('OldClassName', ClassName);
 	return index == INDEX_NONE;
@@ -418,6 +654,29 @@ private function string GetObjectFriendlyName(Object obj, optional string defaul
 	}
 	
 	return str != "" ? str : defaultstr;
+}
+
+static function bool IsSubClass(class ClassToCheck, name ParentClassName)
+{
+	local Object Obj;
+	// get default object which works for abstract classes
+	return GetDefaultObject(ClassToCheck, obj) && obj.IsA(ParentClassName);
+}
+
+// NOTE: needed for hackfix
+static function bool GetDefaultObject(class<Object> cls, out Object obj)
+{
+	local string path;
+
+	path = GetDefaultPath(cls);
+	obj = FindObject(path, cls);
+	return (obj != none);
+}
+
+// NOTE: needed for hackfix
+static function string GetDefaultPath(class<Object> cls)
+{
+	return cls.GetPackageName() $".Default__"$ cls.Name;
 }
 
 //**********************************************************************************
@@ -511,6 +770,8 @@ private static function string GetMutatorName(Mutator M)
 
 Defaultproperties
 {
+	GroupNames[0]="WEAPONMOD"
+
 	DialogNameColor="R=1.0,G=1.0,B=0.5,A=1.0"
 	DialogBadColor="R=1.0,G=0.5,B=0.5,A=1"
 	DialogGoodColor="R=0.1328125,G=0.69140625,B=0.296875,A=1"

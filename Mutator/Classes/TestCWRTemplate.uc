@@ -1,11 +1,7 @@
 class TestCWRTemplate extends UTMutator
+	dependson(TestCentralWeaponReplacement)
 	hidedropdown
 	abstract;
-
-struct TemplateOptionsInfo
-{
-	
-};
 
 struct TemplateInfo
 {
@@ -15,7 +11,7 @@ struct TemplateInfo
 	var string NewClassPath;
 
 	/** the options for this item */
-	var TemplateOptionsInfo Options;
+	var ReplacementOptionsInfo Options;
 
 	/** Flag. Set when to append the package name (of the current package) to the NewClassPath field */
 	var bool AddPackage;
@@ -24,15 +20,18 @@ struct TemplateInfo
 var array<TemplateInfo> WeaponsToReplace;
 var array<TemplateInfo> AmmoToReplace;
 
-function PostBeginPlay()
+event PreBeginPlay()
 {
-	Super.PostBeginPlay();
+	super.PreBeginPlay();
 
-	RegisterByArray(WeaponsToReplace, false);
-	RegisterByArray(AmmoToReplace, true);
+	if (!IsPendingKill())
+	{
+		RegisterByArray(WeaponsToReplace, false);
+		RegisterByArray(AmmoToReplace, true);
+	}
 }
 
-function RegisterByArray(out array<TemplateInfo> ItemsToReplace, bool bAmmo)
+private final function RegisterByArray(out array<TemplateInfo> ItemsToReplace, bool bAmmo)
 {
 	local int i;
 	local string path;
@@ -42,13 +41,13 @@ function RegisterByArray(out array<TemplateInfo> ItemsToReplace, bool bAmmo)
 		path = ItemsToReplace[i].NewClassPath;
 		if (ItemsToReplace[i].AddPackage) path = class.GetPackageName()$"."$path;
 
-		StaticRegisterWeaponReplacement(self, ItemsToReplace[i].OldClassName, path, bAmmo);
+		RegisterWeaponReplacement(self, ItemsToReplace[i].OldClassName, path, bAmmo, ItemsToReplace[i].Options);
 	}
 }
 
-static function bool StaticRegisterWeaponReplacement(Object Registrar, coerce name OldClassName, string NewClassPath, bool bAmmo)
+private final function bool RegisterWeaponReplacement(Object Registrar, coerce name OldClassName, string NewClassPath, bool bAmmo, ReplacementOptionsInfo ReplacementOptions)
 {
-	class'TestCentralWeaponReplacement'.static.StaticRegisterWeaponReplacement(Registrar, OldClassName, NewClassPath, bAmmo);
+	return class'TestCentralWeaponReplacement'.static.StaticRegisterWeaponReplacement(Registrar, OldClassName, NewClassPath, bAmmo, ReplacementOptions);
 }
 
 DefaultProperties
