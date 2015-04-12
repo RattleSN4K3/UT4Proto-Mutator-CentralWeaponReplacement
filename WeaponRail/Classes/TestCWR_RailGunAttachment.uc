@@ -11,4 +11,6 @@ DefaultProperties
 	Begin Object Name=SkeletalMeshComponent0
 		Materials(0)=MyMaterialInstanceAttachment
 	End Object
+
+	WeaponClass=class'TestCWR_RailGunWeapon'
 }

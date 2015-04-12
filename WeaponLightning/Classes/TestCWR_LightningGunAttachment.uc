@@ -14,4 +14,6 @@ DefaultProperties
 
 	TeamSkins[0]=MyMaterialInstanceAttachment
 	TeamSkins[1]=MyMaterialInstanceAttachment
+
+	WeaponClass=class'TestCWR_LightningGunWeapon'
 }
