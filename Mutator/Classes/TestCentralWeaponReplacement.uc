@@ -372,11 +372,11 @@ function ModifyPlayer(Pawn Other)
 function MatchStarting()
 {
 	local int i;
-	local string str;
+	local string str, s;
 
 	super.MatchStarting();
 
-	if (ErrorMessages.Length > 0 && WorldInfo.NetMode != NM_DedicatedServer)
+	if (ErrorMessages.Length > 0)
 	{
 		// init datastore for weapons and mutators
 		LoadMutators();
@@ -384,9 +384,17 @@ function MatchStarting()
 
 		for (i=0; i<ErrorMessages.Length; i++)
 		{
-			if (str != "" || i > 0)
-				str $= Chr(10);
-			str $= GenerateErrorInfo(ErrorMessages[i]);
+			s = DumpErrorInfo(ErrorMessages[i]);
+			LogInternal(s);
+
+			if (WorldInfo.NetMode != NM_DedicatedServer)
+			{
+				WriteToConsole(s);
+
+				if (str != "" || i > 0)
+					str $= Chr(10);
+				str $= GenerateErrorInfo(ErrorMessages[i]);
+			}
 		}
 
 		// clear out data
@@ -394,8 +402,11 @@ function MatchStarting()
 		HashedWeapons.Length = 0;
 		HashedAmmos.Length = 0;
 
-		str = Repl(Repl(MessageErrors, "  ", Chr(10)), "`errors", str);
-		ShowMessageBox(str, GetHumanReadableName());
+		if (WorldInfo.NetMode != NM_DedicatedServer)
+		{
+			str = Repl(Repl(MessageErrors, "  ", Chr(10)), "`errors", str);
+			ShowMessageBox(str, GetHumanReadableName());
+		}
 	}
 }
 
@@ -649,11 +660,32 @@ function bool IsNewItem(out array<ReplacementInfoEx> items, out int index, name 
 	return index == INDEX_NONE;
 }
 
-private function string GenerateErrorInfo(ErrorMessageInfo err)
+private function string DumpErrorInfo(ErrorMessageInfo err)
 {
 	local string str;
+	if (!ClassPathValid(err.NewClassPath))
+	{
+		str = err.Registrar != none ? "CWR: `old already removed by `already" : "CWR: `old already removed by default configuration";
+	}
+	else
+	{
+		str = "CWR: Unable to add `new";
+		if (err.Registrar != none) str $= " (by `mutator)";
+		str $= ". ";
+		str $= err.Conflict != none ? "`already is already replacing `old" : "`old already replaced by default configuration";
+	}
 
-	if (!ClassPathValid(err.NewClassPath)) // TODO: Check for valid class path and not just for empty string
+	str = Repl(str, "`new", Mid(err.NewClassPath, Instr(err.NewClassPath, ".")+1));
+	str = Repl(str, "`old", err.ClassName);
+	str = Repl(str, "`already", err.Conflict != none ? err.Conflict.Class.Name : '');
+	str = Repl(str, "`mutator", err.Registrar != none ? err.Registrar.Class.Name : '');
+	return str;
+}
+
+private function string GenerateErrorInfo(ErrorMessageInfo err, optional bool bColorize = true)
+{
+	local string str;
+	if (!ClassPathValid(err.NewClassPath))
 	{
 		str = err.Registrar != none ? MessageClassRemovedBy : MessageClassRemovedDefault;
 	}
@@ -663,12 +695,16 @@ private function string GenerateErrorInfo(ErrorMessageInfo err)
 		str $= " ";
 		str $= err.Conflict != none ? MessageClassReplacedBy : MessageClassReplacedDefault;
 	}
-
-	str = Repl(str, "`new", Colorize(GetPickupName(err.NewClassPath, true), DialogNameColor));
-	str = Repl(str, "`old", Colorize(GetPickupName(err.ClassName, false), DialogNameColor));
-	str = Repl(str, "`already", Colorize(GetObjectFriendlyName(err.Conflict), DialogGoodColor));
-	str = Repl(str, "`mutator", Colorize(GetObjectFriendlyName(err.Registrar), DialogBadColor));
+	str = Repl(str, "`new", SubstErrorInfo(GetPickupName(err.NewClassPath, true), bColorize, DialogNameColor));
+	str = Repl(str, "`old", SubstErrorInfo(GetPickupName(err.ClassName, false), bColorize, DialogNameColor));
+	str = Repl(str, "`already", SubstErrorInfo(GetObjectFriendlyName(err.Conflict), bColorize, DialogGoodColor));
+	str = Repl(str, "`mutator", SubstErrorInfo(GetObjectFriendlyName(err.Registrar), bColorize, DialogBadColor));
 	return str;
+}
+
+private function string SubstErrorInfo(string str, optional bool bColor, optional string ColorString)
+{
+	return (bColor && ColorString != "") ? Colorize(str, ColorString) : str;
 }
 
 private function string GetPickupName(coerce string Path, bool IsPath)
@@ -788,6 +824,16 @@ static function ShowMessageBox(string message, optional string Title="")
 	{
 		UTUIScene_MessageBox(OpenedScene).Display(message, Title);
 	}
+}
+
+static function WriteToConsole(string message)
+{
+	local GameUISceneClient SceneClient;
+	local Console con;
+
+	SceneClient = class'UIRoot'.static.GetSceneClient();
+	con = SceneClient.ViewportConsole;
+	con.OutputText(message);
 }
 
 static function string Colorize(coerce string str, string ColorString)
