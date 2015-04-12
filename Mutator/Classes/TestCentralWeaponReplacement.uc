@@ -62,6 +62,20 @@ struct ReplacementInfoEx
 	var transient Object Registrar;
 };
 
+struct TemplateInfo
+{
+	/** class name of the weapon we want to get rid of */
+	var name OldClassName;
+	/** fully qualified path of the class to replace it with */
+	var string NewClassPath;
+
+	/** the options for this item */
+	var ReplacementOptionsInfo Options;
+
+	/** Flag. Set when to append the package name (of the current package) to the NewClassPath field */
+	var bool AddPackage;
+};
+
 struct ErrorMessageInfo
 {
 	var Object Conflict;
@@ -94,6 +108,10 @@ struct HashedAmmoInfo
 // Variables
 //**********************************************************************************
 
+var() const string ParameterProfile;
+var string CurrentProfileName;
+var TestCWRMapProfile CurrentProfile;
+
 // Config
 // ------------
 
@@ -124,6 +142,7 @@ var() string DialogBadColor;
 // Localization
 // ------------
 
+var localized string ProfileTitle;
 var localized string MessageErrors;
 var localized string MessageClassReplacedBy;
 var localized string MessageClassReplacedDefault;
@@ -166,8 +185,21 @@ function InitMutator(string Options, out string ErrorMessage)
 	local int i, j;
 	local UTGame G;
 	local class<UTWeapon> WeaponClass;
+	local TestCWRMapProfile MapProvider;
 
 	super.InitMutator(Options, ErrorMessage);
+
+	if (class'GameInfo'.static.HasOption(Options, ParameterProfile))
+	{
+		CurrentProfileName = class'GameInfo'.static.ParseOption(Options, ParameterProfile);
+	}
+
+	if (CurrentProfileName != "" && class'TestCWRMapProfile'.static.GetMapProfileByName(CurrentProfileName, MapProvider))
+	{
+		CurrentProfile = MapProvider;
+		RegisterWeaponReplacementArray(CurrentProfile, CurrentProfile.WeaponsToReplace, false);
+		RegisterWeaponReplacementArray(CurrentProfile, CurrentProfile.AmmoToReplace, true);
+	}
 
 	// Make sure the game does not hold a null reference
 	G = UTGame(WorldInfo.Game);
@@ -449,6 +481,19 @@ function RegisterWeaponReplacement(Object Registrar, name OldClassName, string N
 	}
 }
 
+function RegisterWeaponReplacementArray(Object Registrar, array<TemplateInfo> Replacements, bool bAmmo)
+{
+	local int i;
+	for (i=0; i<Replacements.Length; i++)
+	{
+		RegisterWeaponReplacement(Registrar,
+			Replacements[i].OldClassName,
+			Replacements[i].NewClassPath,
+			bAmmo,
+			Replacements[i].Options);
+	}
+}
+
 static function bool StaticRegisterWeaponReplacement(Object Registrar, coerce name OldClassName, string NewClassPath, bool bAmmo, optional ReplacementOptionsInfo ReplacementOptions, optional bool bSilent, optional out string ErrorMessage)
 {
 	local WorldInfo WI;
@@ -620,7 +665,6 @@ function bool ShouldBeReplaced(out int index, class ClassToCheck, bool bAmmo)
 		{
 			for (i=0; i<AmmoToReplace.Length; i++)
 			{
-				
 				if (AmmoToReplace[i].Options.bSubClasses && IsSubClass(ClassToCheck, AmmoToReplace[i].OldClassName))
 				{
 					index = i;
@@ -677,8 +721,8 @@ private function string DumpErrorInfo(ErrorMessageInfo err)
 
 	str = Repl(str, "`new", Mid(err.NewClassPath, Instr(err.NewClassPath, ".")+1));
 	str = Repl(str, "`old", err.ClassName);
-	str = Repl(str, "`already", err.Conflict != none ? err.Conflict.Class.Name : '');
-	str = Repl(str, "`mutator", err.Registrar != none ? err.Registrar.Class.Name : '');
+	str = Repl(str, "`already", GetObjectFriendlyName(err.Conflict,, true));
+	str = Repl(str, "`mutator", GetObjectFriendlyName(err.Registrar,,true));
 	return str;
 }
 
@@ -735,17 +779,20 @@ private function string GetPickupName(coerce string Path, bool IsPath)
 	return str;
 }
 
-private function string GetObjectFriendlyName(Object obj, optional string defaultstr)
+private function string GetObjectFriendlyName(Object obj, optional string defaultstr, optional bool NoFriendly)
 {
 	local int index;
 	local string str;
 
-	if (class(Obj) != none)
-		str = PathName(Obj);
-	else if (Obj != none)
-		str = PathName(Obj.Class);
+	if (TestCWRMapProfile(Obj) != none)
+	{
+		if (NoFriendly)
+			str = string(TestCWRMapProfile(Obj).Name);
+		else
+			str = Repl(ProfileTitle, "`t", TestCWRMapProfile(Obj).ProfileName);
+	}
 	
-	if (str != "")
+	if (str != "" && !NoFriendly)
 	{
 		index = HashedMutators.Find('Hash', Locs(str));
 		if (index != INDEX_NONE && HashedMutators[index].Info != none)
@@ -753,8 +800,8 @@ private function string GetObjectFriendlyName(Object obj, optional string defaul
 			str = HashedMutators[index].Info.FriendlyName;
 		}
 	}
-	
-	if (str == "")
+
+	if (str == "" && !NoFriendly)
 	{
 		if (Actor(obj) != none)
 			str = Actor(obj).GetHumanReadableName();
@@ -762,6 +809,16 @@ private function string GetObjectFriendlyName(Object obj, optional string defaul
 			str = class<Actor>(obj).static.GetLocalString();
 		else if (obj != none)
 			str = string(obj.Name);
+	}
+
+	if (str == "")
+	{
+		if (class(Obj) != none)
+			str = PathName(Obj);
+		else if (Obj != none)
+			str = PathName(Obj.Class);
+
+		str = Mid(str, InStr(str, ".")+1);
 	}
 	
 	return str != "" ? str : defaultstr;
@@ -913,6 +970,8 @@ private static function string GetMutatorName(Mutator M)
 Defaultproperties
 {
 	GroupNames[0]="WEAPONMOD"
+
+	ParameterProfile="CWRMapProfile"
 
 	DialogNameColor="R=1.0,G=1.0,B=0.5,A=1.0"
 	DialogBadColor="R=1.0,G=0.5,B=0.5,A=1"

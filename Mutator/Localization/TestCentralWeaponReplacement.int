@@ -3,6 +3,7 @@ FriendlyName="Central Weapon Replacement"
 Description="Centralized weapon replacment including conflict messaging"
 
 [TestCentralWeaponReplacement]
+ProfileTitle=`t-Profile
 MessageErrors=Some errors occurred in replacing weapons:\n\n`errors
 MessageClassReplacedBy=The mutator `already is already replacing `old.
 MessageClassReplacedDefault=`old is already replaced by the default configuration.

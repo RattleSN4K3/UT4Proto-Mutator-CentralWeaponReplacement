@@ -3,20 +3,6 @@ class TestCWRTemplate extends UTMutator
 	hidedropdown
 	abstract;
 
-struct TemplateInfo
-{
-	/** class name of the weapon we want to get rid of */
-	var name OldClassName;
-	/** fully qualified path of the class to replace it with */
-	var string NewClassPath;
-
-	/** the options for this item */
-	var ReplacementOptionsInfo Options;
-
-	/** Flag. Set when to append the package name (of the current package) to the NewClassPath field */
-	var bool AddPackage;
-};
-
 var array<TemplateInfo> WeaponsToReplace;
 var array<TemplateInfo> AmmoToReplace;
 
