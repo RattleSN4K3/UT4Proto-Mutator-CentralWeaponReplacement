@@ -7,24 +7,40 @@ const DialogDefaultColor = "<color:R=1,G=1,B=1,A=1>";
 // Structs
 //**********************************************************************************
 
+struct ReplacementIgnoreClassesInfo
+{
+	/** class name of the weapon we want to get rid of */
+	var name ClassName;
+	/** Whether to check for subclasses  */
+	var bool bSubClasses;
+
+	structdefaultproperties
+	{
+		bSubClasses=true
+	}
+};
+
 struct ReplacementOptionsInfo
 {
 	/** Whether to replace/remove the class name */
 	var bool bReplaceWeapon;
 	/** Whether to check for subclasses  */
-	var bool bSubclasses;
+	var bool bSubClasses;
 	/** Whether to add the class to the weapon lockers */
 	var bool bAddToLocker;
 	/** Whether to add the class to the default inventory (on spawn) */
 	var bool bAddToDefault;
 
-	/** Whether to prevent replacing default inventory items (to be used with bSubclasses=true) */
+	/** Whether to prevent replacing default inventory items (to be used with bSubClasses=true) */
 	var bool bNoDefaultInventory;
+
+	/** List of classes to ignore in checking for subclasses */
+	var array<ReplacementIgnoreClassesInfo> IgnoreSubClasses<EditCondition=bSubClasses>;
 	
 	structdefaultproperties
 	{
 		bReplaceWeapon=true
-		bSubclasses=false
+		bSubClasses=false
 		bAddToLocker=false
 		bAddToDefault=false
 		bNoDefaultInventory=false
@@ -159,16 +175,16 @@ function InitMutator(string Options, out string ErrorMessage)
 	{
 		for (j=0; j<WeaponsToReplace.Length; j++)
 		{
-			for (i=0; i<G.DefaultInventory.length; i++)
+			if (WeaponsToReplace[j].Options.bReplaceWeapon && !WeaponsToReplace[j].Options.bNoDefaultInventory)
 			{
-				if (G.DefaultInventory[i] == None) continue;
-				if (!WeaponsToReplace[j].Options.bSubclasses && G.DefaultInventory[i].Name != WeaponsToReplace[j].OldClassName) continue;
-
-				// IsA doesn't work for abstract classes, we need to use the workaround/hackfix
-				if (WeaponsToReplace[j].Options.bSubclasses && !IsSubClass(G.DefaultInventory[i], WeaponsToReplace[j].OldClassName)) continue;
-
-				if (WeaponsToReplace[j].Options.bReplaceWeapon && !WeaponsToReplace[j].Options.bNoDefaultInventory)
+				for (i=0; i<G.DefaultInventory.length; i++)
 				{
+					if (G.DefaultInventory[i] == None) continue;
+					if (!WeaponsToReplace[j].Options.bSubClasses && G.DefaultInventory[i].Name != WeaponsToReplace[j].OldClassName) continue;
+
+					// IsA doesn't work for abstract classes, we need to use the workaround/hackfix
+					if (WeaponsToReplace[j].Options.bSubClasses && !IsSubClass(G.DefaultInventory[i], WeaponsToReplace[j].OldClassName)) continue;
+
 					if (!ClassPathValid(WeaponsToReplace[j].NewClassPath))
 					{
 						// replace with nothing
@@ -594,7 +610,7 @@ function bool ShouldBeReplaced(out int index, class ClassToCheck, bool bAmmo)
 			for (i=0; i<AmmoToReplace.Length; i++)
 			{
 				
-				if (AmmoToReplace[i].Options.bSubclasses && IsSubClass(ClassToCheck, AmmoToReplace[i].OldClassName))
+				if (AmmoToReplace[i].Options.bSubClasses && IsSubClass(ClassToCheck, AmmoToReplace[i].OldClassName))
 				{
 					index = i;
 					return true;
@@ -609,7 +625,9 @@ function bool ShouldBeReplaced(out int index, class ClassToCheck, bool bAmmo)
 		{
 			for (i=0; i<WeaponsToReplace.Length; i++)
 			{
-				if (WeaponsToReplace[i].Options.bSubclasses && IsSubClass(ClassToCheck, WeaponsToReplace[i].OldClassName))
+				if (WeaponsToReplace[i].Options.bSubClasses && 
+					IsSubClass(ClassToCheck, WeaponsToReplace[i].OldClassName) &&
+					!IgnoreSubClass(ClassToCheck, WeaponsToReplace[i].Options.IgnoreSubClasses))
 				{
 					index = i;
 					return true;
@@ -718,6 +736,27 @@ static function bool IsSubClass(class ClassToCheck, name ParentClassName)
 	local Object Obj;
 	// get default object which works for abstract classes
 	return GetDefaultObject(ClassToCheck, obj) && obj.IsA(ParentClassName);
+}
+
+static function bool IgnoreSubClass(class ClassToCheck, array<ReplacementIgnoreClassesInfo> ParentCheck)
+{
+	local Object Obj;
+	local int i;
+	
+	// get default object which works for abstract classes
+	if (ParentCheck.Length > 0 && GetDefaultObject(ClassToCheck, obj))
+	{
+		for (i=0; i<ParentCheck.Length; i++)
+		{
+			if ((!ParentCheck[i].bSubClasses && ParentCheck[i].ClassName == ClassToCheck.Name) ||
+				(ParentCheck[i].bSubClasses && obj.IsA(ParentCheck[i].ClassName)))
+			{
+				return true;
+			}
+		}
+	}
+
+	return false;
 }
 
 // NOTE: needed for hackfix
