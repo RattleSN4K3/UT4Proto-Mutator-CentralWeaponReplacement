@@ -112,6 +112,14 @@ var() const string ParameterProfile;
 var string CurrentProfileName;
 var TestCWRMapProfile CurrentProfile;
 
+// Pre Game
+// ------------
+
+/** @ignore */
+var private transient config array<ReplacementInfoEx> StaticWeaponsToReplace;
+/** @ignore */
+var private transient config array<ReplacementInfoEx> StaticAmmoToReplace;
+
 // Config
 // ------------
 
@@ -445,7 +453,7 @@ function MatchStarting()
 // Returns the human readable string representation of an object.
 simulated function String GetHumanReadableName()
 {
-	return GetMutatorName(self);
+	return GetMutatorName(class);
 }
 
 //**********************************************************************************
@@ -464,7 +472,7 @@ function RegisterWeaponReplacement(Object Registrar, name OldClassName, string N
 	{
 		if (IsNewItem(AmmoToReplace, index, OldClassName))
 		{
-			AddWeaponReplacement(true, Registrar, OldClassName, NewClassPath, ReplacementOptions);
+			AddWeaponReplacement(AmmoToReplace, Registrar, OldClassName, NewClassPath, ReplacementOptions);
 		}
 		else if (!(AmmoToReplace[index].NewClassPath ~= NewClassPath))
 		{
@@ -473,7 +481,7 @@ function RegisterWeaponReplacement(Object Registrar, name OldClassName, string N
 	}
 	else if (IsNewItem(WeaponsToReplace, index, OldClassName))
 	{
-		AddWeaponReplacement(false, Registrar, OldClassName, NewClassPath, ReplacementOptions);
+		AddWeaponReplacement(WeaponsToReplace, Registrar, OldClassName, NewClassPath, ReplacementOptions);
 	}
 	else if (!(WeaponsToReplace[index].NewClassPath ~= NewClassPath))
 	{
@@ -494,10 +502,38 @@ function RegisterWeaponReplacementArray(Object Registrar, array<TemplateInfo> Re
 	}
 }
 
-static function bool StaticRegisterWeaponReplacement(Object Registrar, coerce name OldClassName, string NewClassPath, bool bAmmo, optional ReplacementOptionsInfo ReplacementOptions, optional bool bSilent, optional out string ErrorMessage)
+function UnRegisterWeaponReplacement(Object Registrar)
+{
+	local int i;
+
+	for (i=0; i<WeaponsToReplace.Length; i++)
+	{
+		if (WeaponsToReplace[i].Registrar == Registrar)
+		{
+			WeaponsToReplace.Remove(i, 1);
+			i--;
+		}
+	}
+
+	for (i=0; i<AmmoToReplace.Length; i++)
+	{
+		if (AmmoToReplace[i].Registrar == Registrar)
+		{
+			AmmoToReplace.Remove(i, 1);
+			i--;
+		}
+	}
+}
+
+static function bool StaticRegisterWeaponReplacement(Object Registrar, coerce name OldClassName, string NewClassPath, bool bAmmo, optional ReplacementOptionsInfo ReplacementOptions, optional bool bPre, optional bool bOnlyCheck, optional out string ErrorMessage, optional bool bSilent)
 {
 	local WorldInfo WI;
 	local TestCentralWeaponReplacement mut;
+
+	if (bPre)
+	{
+		return StaticPreRegisterWeaponReplacement(Registrar, OldClassName, NewClassPath, bAmmo, ReplacementOptions, bOnlyCheck, ErrorMessage, bSilent);
+	}
 
 	if (Registrar == none)
 	{
@@ -505,42 +541,171 @@ static function bool StaticRegisterWeaponReplacement(Object Registrar, coerce na
 		return false;
 	}
 
-	if (Actor(Registrar) != none)
-		WI = Actor(Registrar).WorldInfo;
-	if (WI == none)
-		WI = class'Engine'.static.GetCurrentWorldInfo();
-
-	if (WI == none)
+	// check for WorldInfo
+	if (!EnsureWorld(Registrar, WI))
 	{
 		ErrorMessage = "No WorldInfo found.";
 		return false;
 	}
 
-	// try to find an existent gneric mutator
-	foreach WI.DynamicActors(class'TestCentralWeaponReplacement', mut)
-		break;
-
-	// if not mutator was found, create one
-	if (mut == none)
-	{
-		mut = WI.Spawn(class'TestCentralWeaponReplacement', WI.Game);
-		if (WI.Game != none)
-		{
-			mut.NextMutator = WI.Game.BaseMutator;
-			WI.Game.BaseMutator = mut;
-		}
-	}
+	// spawn/create mutator
+	EnsureMutator(WI, mut);
 
 	// register the weapon replacement
 	mut.RegisterWeaponReplacement(Registrar, OldClassName, NewClassPath, bAmmo, ReplacementOptions);
 	return true;
 }
 
+static function bool StaticUnRegisterWeaponReplacement(Object Registrar, optional bool bPre, optional bool bSilent, optional out string ErrorMessage)
+{
+	local WorldInfo WI;
+	local TestCentralWeaponReplacement mut;
+
+	if (bPre)
+	{
+		return StaticPreUnRegisterWeaponReplacement(Registrar, bSilent, ErrorMessage);
+	}
+	
+	if (Registrar == none)
+	{
+		ErrorMessage = "No Registrar.";
+		return false;
+	}
+
+	// check for WorldInfo
+	if (!EnsureWorld(Registrar, WI))
+	{
+		ErrorMessage = "No WorldInfo found.";
+		return false;
+	}
+
+	// spawn/create mutator
+	EnsureMutator(WI, mut);
+
+	// register the weapon replacement
+	mut.UnRegisterWeaponReplacement(Registrar);
+}
+
+/** Create/Find the currently spawned mutator
+ * @return true if newly created
+ */
+static function bool EnsureWorld(Object Registrar, out WorldInfo OutWorldInfo)
+{
+	if (Actor(Registrar) != none)
+		OutWorldInfo = Actor(Registrar).WorldInfo;
+	if (OutWorldInfo == none)
+		OutWorldInfo = class'Engine'.static.GetCurrentWorldInfo();
+
+	return OutWorldInfo != none;
+}
+
+/** Create/Find the currently spawned mutator
+ * @return true if newly created
+ */
+static function bool EnsureMutator(WorldInfo WI, out TestCentralWeaponReplacement OutMut)
+{
+	// try to find an existent gneric mutator
+	foreach WI.DynamicActors(class'TestCentralWeaponReplacement', OutMut)
+		break;
+
+	// if not mutator was found, create one
+	if (OutMut == none)
+	{
+		OutMut = WI.Spawn(class'TestCentralWeaponReplacement', WI.Game);
+		if (WI.Game != none)
+		{
+			OutMut.NextMutator = WI.Game.BaseMutator;
+			WI.Game.BaseMutator = OutMut;
+		}
+
+		return true;
+	}
+
+	return false;
+}
+
+//**********************************************************************************
+// Pre-Game/UI Interface functions
+//**********************************************************************************
+
+static function StaticPreClearWeapon()
+{
+	default.StaticWeaponsToReplace.Length = 0;
+	default.StaticAmmoToReplace.Length = 0;
+}
+
+static function bool StaticPreRegisterWeaponReplacement(Object Registrar, name OldClassName, string NewClassPath, bool bAmmo, ReplacementOptionsInfo ReplacementOptions, optional bool bOnlyCheck, optional out string ErrorMessage, optional bool bBatchOp)
+{
+	local int index;
+
+	// ensure empty class path
+	if (NewClassPath ~= "None") NewClassPath = "";
+	NewClassPath = TrimRight(NewClassPath);
+
+	if (bAmmo)
+	{
+		if (IsNewItem(default.StaticAmmoToReplace, index, OldClassName))
+		{
+			if (!bOnlyCheck) AddWeaponReplacement(default.StaticAmmoToReplace, Registrar, OldClassName, NewClassPath, ReplacementOptions);
+			return true;
+		}
+		else if (!(default.StaticAmmoToReplace[index].NewClassPath ~= NewClassPath))
+		{
+			ErrorMessage = GetErrorMessage(default.StaticAmmoToReplace[index].Registrar, Registrar, OldClassName, NewClassPath);
+		}
+	}
+	else if (IsNewItem(default.StaticWeaponsToReplace, index, OldClassName))
+	{
+		if (!bOnlyCheck) AddWeaponReplacement(default.StaticWeaponsToReplace, Registrar, OldClassName, NewClassPath, ReplacementOptions);
+		return true;
+	}
+	else if (!(default.StaticWeaponsToReplace[index].NewClassPath ~= NewClassPath))
+	{
+		ErrorMessage = GetErrorMessage(default.StaticWeaponsToReplace[index].Registrar, Registrar, OldClassName, NewClassPath);
+	}
+
+	return false;
+}
+
+static function bool StaticPreUnRegisterWeaponReplacement(Object Registrar, optional bool bSilent, optional out string ErrorMessage)
+{
+	local int i;
+	local bool bAnyRemoved;
+
+	if (Registrar == none)
+	{
+		ErrorMessage = "No Registrar.";
+		return false;
+	}
+
+	for (i=0; i<default.StaticWeaponsToReplace.Length; i++)
+	{
+		if (default.StaticWeaponsToReplace[i].Registrar == Registrar)
+		{
+			bAnyRemoved = true;
+			default.StaticWeaponsToReplace.Remove(i, 1);
+			i--;
+		}
+	}
+
+	for (i=0; i<default.StaticAmmoToReplace.Length; i++)
+	{
+		if (default.StaticAmmoToReplace[i].Registrar == Registrar)
+		{
+			bAnyRemoved = true;
+			default.StaticAmmoToReplace.Remove(i, 1);
+			i--;
+		}
+	}
+
+	return bAnyRemoved;
+}
+
 //**********************************************************************************
 // Private functions
 //**********************************************************************************
 
-private function AddWeaponReplacement(bool bAmmo, Object Registrar, name OldClassName, string NewClassPath, ReplacementOptionsInfo ReplacementOptions)
+static private function AddWeaponReplacement(out array<ReplacementInfoEx> arr, Object Registrar, name OldClassName, string NewClassPath, ReplacementOptionsInfo ReplacementOptions)
 {
 	local ReplacementInfoEx item;
 	item.OldClassName = OldClassName;
@@ -548,8 +713,7 @@ private function AddWeaponReplacement(bool bAmmo, Object Registrar, name OldClas
 	item.Registrar = Registrar;
 	item.Options = ReplacementOptions;
 
-	if (bAmmo) AmmoToReplace.AddItem(item);
-	else WeaponsToReplace.AddItem(item);
+	arr.AddItem(item);
 }
 
 private function AddErrorMessage(Object Conflicting, Object Registrar, name OldClassName, string NewClassPath)
@@ -561,6 +725,16 @@ private function AddErrorMessage(Object Conflicting, Object Registrar, name OldC
 	ErrorMessages[index].Registrar = Registrar;
 	ErrorMessages[index].ClassName = OldClassName;
 	ErrorMessages[index].NewClassPath = NewClassPath;
+}
+
+static private function string GetErrorMessage(Object Conflicting, Object Registrar, name OldClassName, string NewClassPath)
+{
+	local ErrorMessageInfo item;
+	item.Conflict = Conflicting;
+	item.Registrar = Registrar;
+	item.ClassName = OldClassName;
+	item.NewClassPath = NewClassPath;
+	return DumpErrorInfo(item, true); // TODO: use GenerateErrorInfo once datastores are loaded statically
 }
 
 private function LoadMutators()
@@ -698,22 +872,22 @@ function bool ShouldBeReplaced(out int index, class ClassToCheck, bool bAmmo)
 // Helper functions
 //**********************************************************************************
 
-function bool IsNewItem(out array<ReplacementInfoEx> items, out int index, name ClassName)
+static function bool IsNewItem(out array<ReplacementInfoEx> items, out int index, name ClassName)
 {
 	index = items.Find('OldClassName', ClassName);
 	return index == INDEX_NONE;
 }
 
-private function string DumpErrorInfo(ErrorMessageInfo err)
+static private function string DumpErrorInfo(ErrorMessageInfo err, optional bool NoPrefix)
 {
 	local string str;
 	if (!ClassPathValid(err.NewClassPath))
 	{
-		str = err.Registrar != none ? "CWR: `old already removed by `already" : "CWR: `old already removed by default configuration";
+		str = err.Registrar != none ? "`old already removed by `already" : "`old already removed by default configuration";
 	}
 	else
 	{
-		str = "CWR: Unable to add `new";
+		str = "Unable to add `new";
 		if (err.Registrar != none) str $= " (by `mutator)";
 		str $= ". ";
 		str $= err.Conflict != none ? "`already is already replacing `old" : "`old already replaced by default configuration";
@@ -721,8 +895,9 @@ private function string DumpErrorInfo(ErrorMessageInfo err)
 
 	str = Repl(str, "`new", Mid(err.NewClassPath, Instr(err.NewClassPath, ".")+1));
 	str = Repl(str, "`old", err.ClassName);
-	str = Repl(str, "`already", GetObjectFriendlyName(err.Conflict,, true));
-	str = Repl(str, "`mutator", GetObjectFriendlyName(err.Registrar,,true));
+	str = Repl(str, "`already", StaticGetObjectFriendlyName(err.Conflict, true));
+	str = Repl(str, "`mutator", StaticGetObjectFriendlyName(err.Registrar, true));
+	if (!NoPrefix) str = "CWR:"@str;
 	return str;
 }
 
@@ -779,28 +954,17 @@ private function string GetPickupName(coerce string Path, bool IsPath)
 	return str;
 }
 
-private function string GetObjectFriendlyName(Object obj, optional string defaultstr, optional bool NoFriendly)
+static private function string StaticGetObjectFriendlyName(Object obj, optional bool NoFriendly, optional string defaultstr)
 {
-	local int index;
 	local string str;
-
 	if (TestCWRMapProfile(Obj) != none)
 	{
 		if (NoFriendly)
 			str = string(TestCWRMapProfile(Obj).Name);
 		else
-			str = Repl(ProfileTitle, "`t", TestCWRMapProfile(Obj).ProfileName);
+			str = Repl(default.ProfileTitle, "`t", TestCWRMapProfile(Obj).ProfileName);
 	}
 	
-	if (str != "" && !NoFriendly)
-	{
-		index = HashedMutators.Find('Hash', Locs(str));
-		if (index != INDEX_NONE && HashedMutators[index].Info != none)
-		{
-			str = HashedMutators[index].Info.FriendlyName;
-		}
-	}
-
 	if (str == "" && !NoFriendly)
 	{
 		if (Actor(obj) != none)
@@ -811,17 +975,29 @@ private function string GetObjectFriendlyName(Object obj, optional string defaul
 			str = string(obj.Name);
 	}
 
-	if (str == "")
+	if (str == "" && Obj != none)
 	{
-		if (class(Obj) != none)
-			str = PathName(Obj);
-		else if (Obj != none)
-			str = PathName(Obj.Class);
-
+		str = PathName(class(obj) != none ? Obj : Obj.Class);
 		str = Mid(str, InStr(str, ".")+1);
 	}
 	
 	return str != "" ? str : defaultstr;
+}
+
+private function string GetObjectFriendlyName(Object obj, optional bool NoFriendly, optional string defaultstr)
+{
+	local string str;
+	local int index;
+	if (TestCWRMapProfile(Obj) == none && !NoFriendly && Obj != none)
+	{
+		index = HashedMutators.Find('Hash', Locs(PathName(class(obj) != none ? Obj : Obj.Class)));
+		if (index != INDEX_NONE && HashedMutators[index].Info != none)
+		{
+			str = HashedMutators[index].Info.FriendlyName;
+		}
+	}
+
+	return str != "" ? str : StaticGetObjectFriendlyName(obj, NoFriendly, defaultstr);
 }
 
 static function bool IsSubClass(class ClassToCheck, name ParentClassName)
@@ -948,22 +1124,22 @@ static function FixFriendlyName(out string FriendlyName)
 	}
 }
 
-private static function string GetMutatorName(Mutator M)
+static function string GetMutatorName(class<Mutator> MutClass)
 {
 	local Object TempObj;
 	local UTUIDataProvider_Mutator DP;
 	local string Pack;
 
-	Pack = ""$M.class.GetPackageName();
+	Pack = ""$MutClass.GetPackageName();
 	
 	// Check that the data provider for this mutator exists
-	TempObj = new(M.Class.Outer, Pack) Class'Package';
-	DP = new(TempObj, string(M.Class)) Class'UTUIDataProvider_Mutator';
+	TempObj = new(MutClass.Outer, Pack) Class'Package';
+	DP = new(TempObj, string(MutClass)) Class'UTUIDataProvider_Mutator';
 
 	if (DP != none && DP.FriendlyName != "") {
 		return DP.FriendlyName;
 	} else {
-		return ""$M.Class.Name;
+		return ""$MutClass.Name;
 	}
 }
 
