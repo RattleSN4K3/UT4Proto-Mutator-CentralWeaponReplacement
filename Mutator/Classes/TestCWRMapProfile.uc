@@ -16,7 +16,7 @@ var config array<TemplateInfo> AmmoToReplace;
 // Static functions
 //**********************************************************************************
 
-static simulated function bool GetMapProfileByName(string ProfileName, out TestCWRMapProfile out_MapProvider)
+static simulated function bool GetMapProfileByName(string InProfileName, out TestCWRMapProfile out_MapProvider)
 {
 	local array<TestCWRMapProfile> MapProviders;
 	local TestCWRMapProfile MapProvider;
@@ -25,7 +25,7 @@ static simulated function bool GetMapProfileByName(string ProfileName, out TestC
 	{
 		foreach MapProviders(MapProvider)
 		{
-			if (string(MapProvider.Name) ~= ProfileName || MapProvider.ProfileName ~= ProfileName)
+			if (string(MapProvider.Name) ~= InProfileName || MapProvider.ProfileName ~= InProfileName)
 			{
 				out_MapProvider = MapProvider;
 				break;
@@ -36,7 +36,7 @@ static simulated function bool GetMapProfileByName(string ProfileName, out TestC
 	return out_MapProvider != none;
 }
 
-static simulated function bool GetMapProfilesByFullMapName(string FullMapName, out array<TestCWRMapProfile> out_MapProviders)
+static simulated function bool GetMapProfilesByFullMapName(string InFullMapName, out array<TestCWRMapProfile> out_MapProviders)
 {
 	local array<TestCWRMapProfile> MapProviders;
 	local TestCWRMapProfile MapProvider;
@@ -46,7 +46,7 @@ static simulated function bool GetMapProfilesByFullMapName(string FullMapName, o
 	out_MapProviders.Length = 0;
 	foreach MapProviders(MapProvider)
 	{
-		if (MapProvider.FullMapName ~= FullMapName)
+		if (MapProvider.FullMapName ~= InFullMapName)
 		{
 			out_MapProviders.AddItem(MapProvider);
 		}
@@ -55,7 +55,7 @@ static simulated function bool GetMapProfilesByFullMapName(string FullMapName, o
 	return out_MapProviders.Length > 0;
 }
 
-static simulated function bool GetMapProfilesByMapName(string MapName, out array<TestCWRMapProfile> out_MapProviders)
+static simulated function bool GetMapProfilesByMapName(string InMapName, out array<TestCWRMapProfile> out_MapProviders)
 {
 	local array<TestCWRMapProfile> MapProviders;
 	local TestCWRMapProfile MapProvider;
@@ -65,7 +65,7 @@ static simulated function bool GetMapProfilesByMapName(string MapName, out array
 	out_MapProviders.Length = 0;
 	foreach MapProviders(MapProvider)
 	{
-		if (MapProvider.MapName ~= MapName || MapProvider.FullMapName ~= MapName)
+		if (MapProvider.MapName ~= InMapName || MapProvider.FullMapName ~= InMapName)
 		{
 			out_MapProviders.AddItem(MapProvider);
 		}
