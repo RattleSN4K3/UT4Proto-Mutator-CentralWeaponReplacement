@@ -279,7 +279,10 @@ function bool CheckReplacement(Actor Other)
 			Locker = UTWeaponLocker(Other);
 			for (i = 0; i < Locker.Weapons.length; i++)
 			{
-				if (Locker.Weapons[i].WeaponClass != none && ShouldBeReplaced(index, Locker.Weapons[i].WeaponClass, false) && WeaponsToReplace[index].Options.bReplaceWeapon)
+				if (Locker.Weapons[i].WeaponClass != none &&
+					ShouldBeReplaced(index, Locker.Weapons[i].WeaponClass, false) &&
+					WeaponsToReplace[index].Options.bReplaceWeapon &&
+					ShouldBeReplacedLocker(Locker, WeaponsToReplace[index].Options.LockerOptions))
 				{
 					if (WeaponsToReplace[index].NewClassPath == "")
 					{
@@ -779,6 +782,16 @@ function bool ShouldBeReplaced(out int index, class ClassToCheck, bool bAmmo)
 	}
 
 	return index != INDEX_NONE;
+}
+
+function bool ShouldBeReplacedLocker(UTWeaponLocker Locker, ReplacementLockerInfo LockerOptions)
+{
+	if (LockerOptions.Names.Length == 0 && LockerOptions.Groups.Length == 0 && LockerOptions.Tags.Length == 0)
+		return true;
+
+	return LockerOptions.Names.Find(Locker.Name) != INDEX_NONE ||
+		LockerOptions.Groups.Find(Locker.Group) != INDEX_NONE ||
+		LockerOptions.Tags.Find(Locker.Group) != INDEX_NONE;
 }
 
 //**********************************************************************************
