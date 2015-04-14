@@ -19,14 +19,24 @@ struct ReplacementIgnoreClassesInfo
 	}
 };
 
+struct ReplacementLockerInfo
+{
+	/** List of Locker names to add the weapon to  */
+	var array<name> Names;
+
+	/** List of Locker groups to add the weapon to  */
+	var array<name> Groups;
+
+	/** List of Locker tag to add the weapon to  */
+	var array<name> Tags;
+};
+
 struct ReplacementOptionsInfo
 {
 	/** Whether to replace/remove the weapon */
 	var bool bReplaceWeapon;
 	/** Whether to check for subclasses  */
 	var bool bSubClasses;
-	/** Whether to add the weapon to the weapon lockers */
-	var bool bAddToLocker;
 	/** Whether to add the inventory item to the default inventory (on spawn) */
 	var bool bAddToDefault;
 
@@ -35,14 +45,20 @@ struct ReplacementOptionsInfo
 
 	/** List of classes to ignore in checking for subclasses */
 	var array<ReplacementIgnoreClassesInfo> IgnoreSubClasses<EditCondition=bSubClasses>;
+
+	/** Whether to add the weapon to the weapon lockers */
+	var bool bAddToLocker;
+	/** Options to specify to which Locker the weapon should be added */
+	var ReplacementLockerInfo LockerOptions;
 	
 	structdefaultproperties
 	{
 		bReplaceWeapon=true
 		bSubClasses=false
-		bAddToLocker=false
 		bAddToDefault=false
 		bNoDefaultInventory=false
+
+		bAddToLocker=false
 	}
 };
 
@@ -161,7 +177,7 @@ function InitMutator(string Options, out string ErrorMessage)
 	{
 		for (j=0; j<WeaponsToReplace.Length; j++)
 		{
-			if (WeaponsToReplace[j].Options.bReplaceWeapon && !WeaponsToReplace[j].Options.bNoDefaultInventory)
+			if (WeaponsToReplace[j].OldClassName != '' && WeaponsToReplace[j].Options.bReplaceWeapon && !WeaponsToReplace[j].Options.bNoDefaultInventory)
 			{
 				for (i=0; i<G.DefaultInventory.length; i++)
 				{
@@ -198,7 +214,7 @@ function InitMutator(string Options, out string ErrorMessage)
 			if (WeaponsToReplace[j].Options.bAddToLocker)
 			{
 				WeaponClass = class<UTWeapon>(DynamicLoadObject(WeaponsToReplace[j].NewClassPath, class'Class'));
-				AddToLocker(WeaponClass);
+				AddToLocker(WeaponClass, WeaponsToReplace[j].Options.LockerOptions);
 			}
 		}
 
@@ -699,23 +715,30 @@ private function AddErrorMessage(Object Conflicting, Object Registrar, name OldC
 	ErrorMessages[index].NewClassPath = NewClassPath;
 }
 
-function AddToLocker(class<UTWeapon> WeaponClass)
+function AddToLocker(class<UTWeapon> WeaponClass, ReplacementLockerInfo LockerOptions)
 {
 	local UTWeaponLocker Locker;
 	local WeaponEntry ent;
+	local bool bToAll;
 
 	if (WeaponClass == none)
 		return;
 
+	bToAll = LockerOptions.Names.Length == 0 && LockerOptions.Groups.Length == 0 && LockerOptions.Tags.Length == 0;
 	foreach DynamicActors(class'UTWeaponLocker', Locker)
 	{
-		ent.WeaponClass = WeaponClass;
-		Locker.MaxDesireability += WeaponClass.Default.AIRating;
+		if (bToAll || LockerOptions.Names.Find(Locker.Name) != INDEX_NONE ||
+			LockerOptions.Groups.Find(Locker.Group) != INDEX_NONE ||
+			LockerOptions.Tags.Find(Locker.Group) != INDEX_NONE)
+		{
+			ent.WeaponClass = WeaponClass;
+			Locker.MaxDesireability += WeaponClass.Default.AIRating;
 
-		//if (WeaponClass.default.PickupFactoryMesh != none)
-		//	ent.PickupMesh = WeaponClass.default.PickupFactoryMesh;
+			//if (WeaponClass.default.PickupFactoryMesh != none)
+			//	ent.PickupMesh = WeaponClass.default.PickupFactoryMesh;
 
-		Locker.Weapons.AddItem(ent);
+			Locker.Weapons.AddItem(ent);
+		}
 	}
 }
 
