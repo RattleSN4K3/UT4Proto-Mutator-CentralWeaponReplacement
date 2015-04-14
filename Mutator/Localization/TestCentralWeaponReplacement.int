@@ -12,3 +12,6 @@ MessageClassSubstDefault=`new cannot be added.
 MessageClassRemovedBy=The mutator `already already removed `old.
 MessageClassRemovedDefault=`old is already removed by the default configuration.
 
+[TestCWRUIFrontend]
+ErrorMessage=Unable to add `mutator.  `error`query
+ErrorQuery=    Do you want to continue enabling the mutator?

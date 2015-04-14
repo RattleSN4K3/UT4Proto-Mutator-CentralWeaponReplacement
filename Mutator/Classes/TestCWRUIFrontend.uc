@@ -1,5 +1,11 @@
 class TestCWRUIFrontend extends UTUIFrontEnd_Mutators;
 
+var protected int PendingMutatorId;
+var protected string PendingClassPath;
+
+var localized string ErrorMessage;
+var localized string ErrorQuery;
+
 //**********************************************************************************
 // Inherited functions
 //**********************************************************************************
@@ -35,25 +41,41 @@ event SceneDeactivated()
 /** Modifies the enabled mutator array to enable/disable a mutator. */
 function SetMutatorEnabled(int MutatorId, bool bEnabled)
 {
-	local string ClassPath, s;
-	local int cnt;
+	local string error, msg, title;
 	local class<Mutator> Mutclass;
+	local UTUIScene_MessageBox MessageBoxReference;
 
-	ClassPath = string(GetClassNameFromIndex(MutatorId));
+	PendingMutatorId = INDEX_NONE;
+	PendingClassPath = string(GetClassNameFromIndex(MutatorId));
 
 	if (bEnabled)
 	{
-		if (IsInConflict(ClassPath, s, Mutclass))
+		if (IsInConflict(PendingClassPath, error, Mutclass))
 		{
-			s = Repl("Unable to add `mutator.", "`mutator", class'TestCWRUI'.static.GetMutatorName(Mutclass))$Chr(10)$s;
-			DisplayMessageBox(s, class'TestCWRUI'.static.GetMutatorName(class'TestCentralWeaponReplacement'));
+			PendingMutatorId = MutatorId;
+
+			title = class'TestCWRUI'.static.GetMutatorName(class'TestCentralWeaponReplacement');
+			MessageBoxReference = GetMessageBoxScene();
+
+			msg = ErrorMessage;
+			msg = Repl(msg, "`query", MessageBoxReference != none ? ErrorQuery : "");
+			msg = Repl(msg, "`error", error);
+			msg = Repl(msg, "`mutator", class'TestCWRUI'.static.GetMutatorName(Mutclass));
+			msg = Repl(msg, "  ", Chr(10));
+
+			if(MessageBoxReference != none)
+			{	
+				MessageBoxReference.DisplayAcceptCancelBox(msg, title, OnMutator_Add_Confirm);
+			}
+			else
+			{
+				DisplayMessageBox(msg, title);
+			}
 			return;
 		}
 	}
 
-	cnt = EnabledList.Items.length;
-	super.SetMutatorEnabled(MutatorId, bEnabled);
-	if (cnt != EnabledList.Items.length) PreInit(ClassPath, bEnabled, Mutclass);
+	SetMutatorEnabledNoCheck(MutatorId, bEnabled);
 }
 
 //**********************************************************************************
@@ -81,6 +103,25 @@ function InitUICheck()
 function CleanupUICheck()
 {
 	class'TestCentralWeaponReplacement'.static.StaticPreDestroy();
+}
+
+/** Modifies the enabled mutator array to enable/disable a mutator. */
+function SetMutatorEnabledNoCheck(int MutatorId, bool bEnabled)
+{
+	local int cnt;
+	
+	cnt = EnabledList.Items.length;
+	super.SetMutatorEnabled(MutatorId, bEnabled);
+	if (cnt != EnabledList.Items.length) PreInit(PendingClassPath, bEnabled);
+}
+
+/** Confirmation for adding conflicting mutator. */
+function OnMutator_Add_Confirm(UTUIScene_MessageBox MessageBox, int SelectedItem, int PlayerIndex)
+{
+	if(SelectedItem == 0)
+	{
+		SetMutatorEnabledNoCheck(PendingMutatorId, true);
+	}
 }
 
 //**********************************************************************************
@@ -124,5 +165,7 @@ function bool PreInit(string ClassPath, bool bAdd, optional class<Mutator> Mutcl
 
 DefaultProperties
 {
+	ErrorMessage="Unable to add `mutator.  `error`query"
+	ErrorQuery="    Do you want to continue enabling the mutator?"
 }
 
