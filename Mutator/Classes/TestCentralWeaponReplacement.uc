@@ -527,6 +527,7 @@ static function bool StaticUnRegisterWeaponReplacement(Object Registrar, optiona
 
 	// register the weapon replacement
 	mut.UnRegisterWeaponReplacement(Registrar);
+	return true;
 }
 
 /** Create/Find the currently spawned mutator
@@ -574,6 +575,7 @@ static function bool EnsureMutator(WorldInfo WI, out TestCentralWeaponReplacemen
 static function StaticPreInitialize()
 {
 	local TestCentralWeaponReplacement MutatorObj;
+	local int i;
 
 	default.StaticWeaponsToReplace.Length = 0;
 	default.StaticAmmoToReplace.Length = 0;
@@ -582,6 +584,12 @@ static function StaticPreInitialize()
 	{
 		MutatorObj.DataCache = class'TestCWRUI'.static.GetData();
 	}
+
+	for (i=0; i<default.DefaultWeaponsToReplace.Length; i++)
+		StaticRegisterWeaponReplacement(none, default.DefaultWeaponsToReplace[i].OldClassName, default.DefaultWeaponsToReplace[i].NewClassPath, false, default.DefaultWeaponsToReplace[i].Options, true);
+
+	for (i=0; i<default.DefaultAmmoToReplace.Length; i++)
+		StaticRegisterWeaponReplacement(none, default.DefaultAmmoToReplace[i].OldClassName, default.DefaultAmmoToReplace[i].NewClassPath, true, default.DefaultAmmoToReplace[i].Options, true);
 }
 
 static function StaticPreDestroy()
