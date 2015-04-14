@@ -1,8 +1,8 @@
-[BotBalancerMutator UTUIDataProvider_Mutator]
+[TestCentralWeaponReplacement UTUIDataProvider_Mutator]
 FriendlyName="Central Weapon Replacement"
 Description="Centralized weapon replacment including conflict messaging"
 
-[TestCentralWeaponReplacement]
+[TestCWRData]
 ProfileTitle=`t-Profile
 MessageErrors=Some errors occurred in replacing weapons:\n\n`errors
 MessageClassReplacedBy=The mutator `already is already replacing `old.
@@ -11,3 +11,4 @@ MessageClassSubstBy=`new cannot be added by `mutator.
 MessageClassSubstDefault=`new cannot be added.
 MessageClassRemovedBy=The mutator `already already removed `old.
 MessageClassRemovedDefault=`old is already removed by the default configuration.
+

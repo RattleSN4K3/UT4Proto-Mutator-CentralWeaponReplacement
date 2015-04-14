@@ -1,7 +1,6 @@
 class TestCentralWeaponReplacement extends UTMutator
+	dependson(TestCWRUI)
 	config(TestCentralWeaponReplacement);
-
-const DialogDefaultColor = "<color:R=1,G=1,B=1,A=1>";
 
 //**********************************************************************************
 // Structs
@@ -9,7 +8,7 @@ const DialogDefaultColor = "<color:R=1,G=1,B=1,A=1>";
 
 struct ReplacementIgnoreClassesInfo
 {
-	/** class name of the weapon we want to get rid of */
+	/** class name of the pickup we want to ignore to be replaced */
 	var name ClassName;
 	/** Whether to check for subclasses  */
 	var bool bSubClasses;
@@ -22,17 +21,17 @@ struct ReplacementIgnoreClassesInfo
 
 struct ReplacementOptionsInfo
 {
-	/** Whether to replace/remove the class name */
+	/** Whether to replace/remove the weapon */
 	var bool bReplaceWeapon;
 	/** Whether to check for subclasses  */
 	var bool bSubClasses;
-	/** Whether to add the class to the weapon lockers */
+	/** Whether to add the weapon to the weapon lockers */
 	var bool bAddToLocker;
-	/** Whether to add the class to the default inventory (on spawn) */
+	/** Whether to add the inventory item to the default inventory (on spawn) */
 	var bool bAddToDefault;
 
 	/** Whether to prevent replacing default inventory items (to be used with bSubClasses=true) */
-	var bool bNoDefaultInventory;
+	var bool bNoDefaultInventory<EditCondition=bSubClasses>;
 
 	/** List of classes to ignore in checking for subclasses */
 	var array<ReplacementIgnoreClassesInfo> IgnoreSubClasses<EditCondition=bSubClasses>;
@@ -72,36 +71,8 @@ struct TemplateInfo
 	/** the options for this item */
 	var ReplacementOptionsInfo Options;
 
-	/** Flag. Set when to append the package name (of the current package) to the NewClassPath field */
+	/** Flag. Set whether to append the package name (of the current package) to the NewClassPath field */
 	var bool AddPackage;
-};
-
-struct ErrorMessageInfo
-{
-	var Object Conflict;
-	var Object Registrar;
-	var name ClassName;
-	var string NewClassPath;
-};
-
-struct HashedMutatorInfo
-{
-	var string Hash;
-	var UTUIDataProvider_Mutator Info;
-};
-
-struct HashedWeaponInfo
-{
-	var string Hash;
-	var name ClassName;
-	var UTUIDataProvider_Weapon Info;
-};
-
-struct HashedAmmoInfo
-{
-	var string Hash;
-	var name ClassName;
-	var string Text;
 };
 
 //**********************************************************************************
@@ -109,8 +80,6 @@ struct HashedAmmoInfo
 //**********************************************************************************
 
 var() const string ParameterProfile;
-var string CurrentProfileName;
-var TestCWRMapProfile CurrentProfile;
 
 // Pre Game
 // ------------
@@ -132,39 +101,19 @@ var config array<ReplacementInfoEx> DefaultAmmoToReplace;
 var array<ReplacementInfoEx> WeaponsToReplace;
 var array<ReplacementInfoEx> AmmoToReplace;
 
-var array<HashedMutatorInfo> HashedMutators;
-var array<HashedWeaponInfo> HashedWeapons;
-var array<HashedAmmoInfo> HashedAmmos;
+var TestCWRUI DataCache;
+var array<ErrorMessageInfo> ErrorMessages;
 
 var array<int> EnforcerIndizes;
 
-// UI
-// ------------
-
-var array<ErrorMessageInfo> ErrorMessages;
-
-var() string DialogNameColor;
-var() string DialogGoodColor;
-var() string DialogBadColor;
-
-// Localization
-// ------------
-
-var localized string ProfileTitle;
-var localized string MessageErrors;
-var localized string MessageClassReplacedBy;
-var localized string MessageClassReplacedDefault;
-var localized string MessageClassSubstBy;
-var localized string MessageClassSubstDefault;
-var localized string MessageClassRemovedBy;
-var localized string MessageClassRemovedDefault;
+var string CurrentProfileName;
+var TestCWRMapProfile CurrentProfile;
 
 //**********************************************************************************
 // Inherited functions
 //**********************************************************************************
 
-/* Don't call Actor PreBeginPlay() for Mutator
-*/
+// Intialize the default replacments
 event PreBeginPlay()
 {
 	local int i;
@@ -183,11 +132,8 @@ event PreBeginPlay()
 	}
 }
 
-/**
- * This function can be used to parse the command line parameters when a server
- * starts up
- */
-
+// used to check for default inventory items to be replaced or
+// whether an item should be added to the weapon lockers or the default inventory
 function InitMutator(string Options, out string ErrorMessage)
 {
 	local int i, j;
@@ -284,6 +230,7 @@ function InitMutator(string Options, out string ErrorMessage)
 	}
 }
 
+// check for factory and replace/remove their inventory item (if desired)
 function bool CheckReplacement(Actor Other)
 {
 	local UTWeaponPickupFactory WeaponPickup;
@@ -377,9 +324,8 @@ function bool CheckReplacement(Actor Other)
 	return true;
 }
 
-/* called by GameInfo.RestartPlayer()
-	change the players jumpz, etc. here
-*/
+// Fix Dual Enforcer
+/** called by GameInfo.RestartPlayer() */
 function ModifyPlayer(Pawn Other)
 {
 	local int i, index;
@@ -408,52 +354,49 @@ function ModifyPlayer(Pawn Other)
 	}
 }
 
-// called when gameplay actually starts
+// print error message on local players or on log
+/** called when gameplay actually starts */
 function MatchStarting()
 {
 	local int i;
 	local string str, s;
-
+	
 	super.MatchStarting();
 
 	if (ErrorMessages.Length > 0)
 	{
 		// init datastore for weapons and mutators
-		LoadMutators();
-		LoadWeapons();
+		DataCache = class'TestCWRUI'.static.GetData();
 
 		for (i=0; i<ErrorMessages.Length; i++)
 		{
-			s = DumpErrorInfo(ErrorMessages[i]);
+			s = DataCache.DumpErrorInfo(ErrorMessages[i]);
 			LogInternal(s);
 
 			if (WorldInfo.NetMode != NM_DedicatedServer)
 			{
 				WriteToConsole(s);
 
-				if (str != "" || i > 0)
-					str $= Chr(10);
-				str $= GenerateErrorInfo(ErrorMessages[i]);
+				if (str != "" || i > 0) str $= Chr(10);
+				str $= DataCache.GenerateErrorInfo(ErrorMessages[i]);
 			}
 		}
 
-		// clear out data
-		HashedMutators.Length = 0;
-		HashedWeapons.Length = 0;
-		HashedAmmos.Length = 0;
-
 		if (WorldInfo.NetMode != NM_DedicatedServer)
 		{
-			str = Repl(Repl(MessageErrors, "  ", Chr(10)), "`errors", str);
-			ShowMessageBox(str, GetHumanReadableName());
+			DataCache.ShowErrorMessage(str, GetHumanReadableName());
 		}
+
+		// clear out data
+		DataCache.Kill();
+		DataCache = none;
 	}
 }
 
 // Returns the human readable string representation of an object.
 simulated function String GetHumanReadableName()
 {
-	return GetMutatorName(class);
+	return class'TestCWRUI'.static.GetMutatorName(class);
 }
 
 //**********************************************************************************
@@ -628,10 +571,31 @@ static function bool EnsureMutator(WorldInfo WI, out TestCentralWeaponReplacemen
 // Pre-Game/UI Interface functions
 //**********************************************************************************
 
-static function StaticPreClearWeapon()
+static function StaticPreInitialize()
 {
+	local TestCentralWeaponReplacement MutatorObj;
+
 	default.StaticWeaponsToReplace.Length = 0;
 	default.StaticAmmoToReplace.Length = 0;
+
+	if (GetStaticMutator(MutatorObj))
+	{
+		MutatorObj.DataCache = class'TestCWRUI'.static.GetData();
+	}
+}
+
+static function StaticPreDestroy()
+{
+	local TestCentralWeaponReplacement MutatorObj;
+
+	default.StaticWeaponsToReplace.Length = 0;
+	default.StaticAmmoToReplace.Length = 0;
+
+	if (GetStaticMutator(MutatorObj) && MutatorObj.DataCache != none)
+	{
+		MutatorObj.DataCache.Kill();
+		MutatorObj.DataCache = none;
+	}
 }
 
 static function bool StaticPreRegisterWeaponReplacement(Object Registrar, name OldClassName, string NewClassPath, bool bAmmo, ReplacementOptionsInfo ReplacementOptions, optional bool bOnlyCheck, optional out string ErrorMessage, optional bool bBatchOp)
@@ -651,7 +615,7 @@ static function bool StaticPreRegisterWeaponReplacement(Object Registrar, name O
 		}
 		else if (!(default.StaticAmmoToReplace[index].NewClassPath ~= NewClassPath))
 		{
-			ErrorMessage = GetErrorMessage(default.StaticAmmoToReplace[index].Registrar, Registrar, OldClassName, NewClassPath);
+			ErrorMessage = class'TestCWRUI'.static.GetData().GetErrorMessage(default.StaticAmmoToReplace[index].Registrar, Registrar, OldClassName, NewClassPath);
 		}
 	}
 	else if (IsNewItem(default.StaticWeaponsToReplace, index, OldClassName))
@@ -661,7 +625,7 @@ static function bool StaticPreRegisterWeaponReplacement(Object Registrar, name O
 	}
 	else if (!(default.StaticWeaponsToReplace[index].NewClassPath ~= NewClassPath))
 	{
-		ErrorMessage = GetErrorMessage(default.StaticWeaponsToReplace[index].Registrar, Registrar, OldClassName, NewClassPath);
+		ErrorMessage = class'TestCWRUI'.static.GetData().GetErrorMessage(default.StaticWeaponsToReplace[index].Registrar, Registrar, OldClassName, NewClassPath);
 	}
 
 	return false;
@@ -725,88 +689,6 @@ private function AddErrorMessage(Object Conflicting, Object Registrar, name OldC
 	ErrorMessages[index].Registrar = Registrar;
 	ErrorMessages[index].ClassName = OldClassName;
 	ErrorMessages[index].NewClassPath = NewClassPath;
-}
-
-static private function string GetErrorMessage(Object Conflicting, Object Registrar, name OldClassName, string NewClassPath)
-{
-	local ErrorMessageInfo item;
-	item.Conflict = Conflicting;
-	item.Registrar = Registrar;
-	item.ClassName = OldClassName;
-	item.NewClassPath = NewClassPath;
-	return DumpErrorInfo(item, true); // TODO: use GenerateErrorInfo once datastores are loaded statically
-}
-
-private function LoadMutators()
-{
-	local array<UTUIResourceDataProvider> ProviderList;
-	local int i;
-	local string hash;
-	local UTUIDataProvider_Mutator mut;
-	local HashedMutatorInfo item;
-
-	class'UTUIDataStore_MenuItems'.static.GetAllResourceDataProviders(class'UTUIDataProvider_Mutator', ProviderList);
-	for (i=0; i<ProviderList.length; i++)
-	{
-		mut = UTUIDataProvider_Mutator(ProviderList[i]);
-		if (mut == none || !ClassPathValid(mut.ClassName)) continue;
-
-		// don't add duplicate items
-		hash = Locs(mut.ClassName);
-		if (HashedMutators.Find('Hash', hash) != INDEX_NONE) continue;
-
-		item.Hash = hash;
-		item.Info = mut;
-
-		HashedMutators.AddItem(item);
-	}
-}
-
-private function LoadWeapons()
-{
-	local array<UTUIResourceDataProvider> ProviderList;
-	local int i, index;
-	local string hash;
-	local UTUIDataProvider_Weapon weapn;
-	local HashedWeaponInfo item;
-	local HashedAmmoInfo ammo;
-
-	local string str, s1, s2;
-
-	class'UTUIDataStore_MenuItems'.static.GetAllResourceDataProviders(class'UTUIDataProvider_Weapon', ProviderList);
-	for (i=0; i<ProviderList.length; i++)
-	{
-		weapn = UTUIDataProvider_Weapon(ProviderList[i]);
-		if (weapn == none || !ClassPathValid(weapn.ClassName)) continue;
-
-		// don't add duplicate items
-		hash = Locs(weapn.ClassName);
-		if (HashedWeapons.Find('Hash', hash) != INDEX_NONE) continue;
-
-		item.Hash = hash;
-		item.Info = weapn;
-		item.ClassName = name(Mid(weapn.ClassName, Instr(weapn.ClassName, ".")+1));
-
-		HashedWeapons.AddItem(item);
-
-		// Ammo
-		if (!ClassPathValid(weapn.AmmoClassPath)) continue;
-		hash = Locs(weapn.AmmoClassPath);
-		if (HashedAmmos.Find('Hash', hash) != INDEX_NONE) continue;
-
-		index = Instr(weapn.AmmoClassPath, ".");
-		s1 = Left(weapn.AmmoClassPath, index);
-		s2 = Mid(weapn.AmmoClassPath, index+1);
-
-		str = Localize(s2, "PickupMessage", s1);
-		FixFriendlyName(str);
-
-		ammo.Hash = hash;
-		ammo.Text = str;
-		ammo.ClassName = name(s2);
-
-		HashedAmmos.AddItem(ammo);
-	}
 }
 
 function AddToLocker(class<UTWeapon> WeaponClass)
@@ -878,128 +760,6 @@ static function bool IsNewItem(out array<ReplacementInfoEx> items, out int index
 	return index == INDEX_NONE;
 }
 
-static private function string DumpErrorInfo(ErrorMessageInfo err, optional bool NoPrefix)
-{
-	local string str;
-	if (!ClassPathValid(err.NewClassPath))
-	{
-		str = err.Registrar != none ? "`old already removed by `already" : "`old already removed by default configuration";
-	}
-	else
-	{
-		str = "Unable to add `new";
-		if (err.Registrar != none) str $= " (by `mutator)";
-		str $= ". ";
-		str $= err.Conflict != none ? "`already is already replacing `old" : "`old already replaced by default configuration";
-	}
-
-	str = Repl(str, "`new", Mid(err.NewClassPath, Instr(err.NewClassPath, ".")+1));
-	str = Repl(str, "`old", err.ClassName);
-	str = Repl(str, "`already", StaticGetObjectFriendlyName(err.Conflict, true));
-	str = Repl(str, "`mutator", StaticGetObjectFriendlyName(err.Registrar, true));
-	if (!NoPrefix) str = "CWR:"@str;
-	return str;
-}
-
-private function string GenerateErrorInfo(ErrorMessageInfo err, optional bool bColorize = true)
-{
-	local string str;
-	if (!ClassPathValid(err.NewClassPath))
-	{
-		str = err.Registrar != none ? MessageClassRemovedBy : MessageClassRemovedDefault;
-	}
-	else
-	{
-		str = err.Registrar != none ? MessageClassSubstBy : MessageClassSubstDefault;
-		str $= " ";
-		str $= err.Conflict != none ? MessageClassReplacedBy : MessageClassReplacedDefault;
-	}
-	str = Repl(str, "`new", SubstErrorInfo(GetPickupName(err.NewClassPath, true), bColorize, DialogNameColor));
-	str = Repl(str, "`old", SubstErrorInfo(GetPickupName(err.ClassName, false), bColorize, DialogNameColor));
-	str = Repl(str, "`already", SubstErrorInfo(GetObjectFriendlyName(err.Conflict), bColorize, DialogGoodColor));
-	str = Repl(str, "`mutator", SubstErrorInfo(GetObjectFriendlyName(err.Registrar), bColorize, DialogBadColor));
-	return str;
-}
-
-private function string SubstErrorInfo(string str, optional bool bColor, optional string ColorString)
-{
-	return (bColor && ColorString != "") ? Colorize(str, ColorString) : str;
-}
-
-private function string GetPickupName(coerce string Path, bool IsPath)
-{
-	local int index;
-	local string str;
-	if (IsPath) index = HashedWeapons.Find('Hash', Locs(Path));
-	else index = HashedWeapons.Find('ClassName', name(Path));
-	if (index != INDEX_NONE && HashedWeapons[index].Info != none)
-	{
-		str = HashedWeapons[index].Info.FriendlyName;
-	}
-	else
-	{
-		if (IsPath) index = HashedAmmos.Find('Hash', Locs(Path));
-		else index = HashedAmmos.Find('ClassName', name(Path));
-		if (index != INDEX_NONE)
-		{
-			str = HashedAmmos[index].Text;
-		}
-	}
-
-	if (str == "" || Left(str, 1) == "?")
-	{
-		str = Mid(Path, Instr(Path, ".")+1);
-	}
-
-	return str;
-}
-
-static private function string StaticGetObjectFriendlyName(Object obj, optional bool NoFriendly, optional string defaultstr)
-{
-	local string str;
-	if (TestCWRMapProfile(Obj) != none)
-	{
-		if (NoFriendly)
-			str = string(TestCWRMapProfile(Obj).Name);
-		else
-			str = Repl(default.ProfileTitle, "`t", TestCWRMapProfile(Obj).ProfileName);
-	}
-	
-	if (str == "" && !NoFriendly)
-	{
-		if (Actor(obj) != none)
-			str = Actor(obj).GetHumanReadableName();
-		if (str == "" && class<Actor>(obj) != none)
-			str = class<Actor>(obj).static.GetLocalString();
-		else if (obj != none)
-			str = string(obj.Name);
-	}
-
-	if (str == "" && Obj != none)
-	{
-		str = PathName(class(obj) != none ? Obj : Obj.Class);
-		str = Mid(str, InStr(str, ".")+1);
-	}
-	
-	return str != "" ? str : defaultstr;
-}
-
-private function string GetObjectFriendlyName(Object obj, optional bool NoFriendly, optional string defaultstr)
-{
-	local string str;
-	local int index;
-	if (TestCWRMapProfile(Obj) == none && !NoFriendly && Obj != none)
-	{
-		index = HashedMutators.Find('Hash', Locs(PathName(class(obj) != none ? Obj : Obj.Class)));
-		if (index != INDEX_NONE && HashedMutators[index].Info != none)
-		{
-			str = HashedMutators[index].Info.FriendlyName;
-		}
-	}
-
-	return str != "" ? str : StaticGetObjectFriendlyName(obj, NoFriendly, defaultstr);
-}
-
 static function bool IsSubClass(class ClassToCheck, name ParentClassName)
 {
 	local Object Obj;
@@ -1048,17 +808,6 @@ static function string GetDefaultPath(class<Object> cls)
 // Static functions
 //**********************************************************************************
 
-static function ShowMessageBox(string message, optional string Title="")
-{
-	local GameUISceneClient MySceneClient;
-	local UIScene OpenedScene;
-	MySceneClient = UTGameUISceneClient(class'UIRoot'.static.GetSceneClient());
-	if (MySceneClient != none && MySceneClient.OpenScene(class'UTUIScene'.default.MessageBoxScene,, OpenedScene) && UTUIScene_MessageBox(OpenedScene) != none)
-	{
-		UTUIScene_MessageBox(OpenedScene).Display(message, Title);
-	}
-}
-
 static function WriteToConsole(string message)
 {
 	local GameUISceneClient SceneClient;
@@ -1067,12 +816,6 @@ static function WriteToConsole(string message)
 	SceneClient = class'UIRoot'.static.GetSceneClient();
 	con = SceneClient.ViewportConsole;
 	con.OutputText(message);
-}
-
-static function string Colorize(coerce string str, string ColorString)
-{
-	//<color:/> doesn't work so we need to use another tag with white color
-	return "<color:"$ColorString$">"$str$DialogDefaultColor;
 }
 
 static function bool ClassPathValid(string classpath)
@@ -1097,50 +840,15 @@ static simulated function string TrimRight(coerce string sInput, optional coerce
 	return sOutput;
 }
 
-/** Fix names which are uppercase */
-static function FixFriendlyName(out string FriendlyName)
+static function bool GetStaticMutator(out TestCentralWeaponReplacement OutMutator)
 {
-	local string str;
-	local array<String> splitname;
-	local int i;
-
-	// check for bad string
-	if (FriendlyName != "" && Caps(FriendlyName) == FriendlyName)
+	local Object Obj;
+	if (GetDefaultObject(default.Class, Obj) && TestCentralWeaponReplacement(Obj) != none)
 	{
-		// remove the special char from the end of the string
-		str = TrimRight(FriendlyName, "!");
-
-		// parse single words into an array
-		ParseStringIntoArray(str, splitname, " ", true);
-		
-		// properly format longer words
-		for (i=0; i<splitname.Length;i++)
-			if (len(splitname[i]) > 2)
-				splitname[i] = Left(splitname[i], 1)$Mid(locs(splitname[i]), 1);
-
-		// join split name
-		JoinArray(splitname, str, " ");
-		FriendlyName = str;
+		OutMutator = TestCentralWeaponReplacement(Obj);
 	}
-}
 
-static function string GetMutatorName(class<Mutator> MutClass)
-{
-	local Object TempObj;
-	local UTUIDataProvider_Mutator DP;
-	local string Pack;
-
-	Pack = ""$MutClass.GetPackageName();
-	
-	// Check that the data provider for this mutator exists
-	TempObj = new(MutClass.Outer, Pack) Class'Package';
-	DP = new(TempObj, string(MutClass)) Class'UTUIDataProvider_Mutator';
-
-	if (DP != none && DP.FriendlyName != "") {
-		return DP.FriendlyName;
-	} else {
-		return ""$MutClass.Name;
-	}
+	return OutMutator != none;
 }
 
 Defaultproperties
@@ -1149,15 +857,5 @@ Defaultproperties
 
 	ParameterProfile="CWRMapProfile"
 
-	DialogNameColor="R=1.0,G=1.0,B=0.5,A=1.0"
-	DialogBadColor="R=1.0,G=0.5,B=0.5,A=1"
-	DialogGoodColor="R=0.1328125,G=0.69140625,B=0.296875,A=1"
-
 	MessageErrors="Some errors occurred in replacing weapons:    `errors"
-	MessageClassReplacedBy="The mutator `already is already replacing `old."
-	MessageClassReplacedDefault="`old is already replaced by the default configuration."
-	MessageClassSubstBy="`new cannot be added by `mutator."
-	MessageClassSubstDefault="`new cannot be added."
-	MessageClassRemovedBy="The mutator `already already removed `old."
-	MessageClassRemovedDefault="`old is already removed by the default configuration."
 }
