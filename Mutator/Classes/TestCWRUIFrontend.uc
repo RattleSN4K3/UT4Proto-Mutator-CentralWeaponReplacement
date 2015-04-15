@@ -1,7 +1,12 @@
 class TestCWRUIFrontend extends UTUIFrontEnd_Mutators;
 
-var protected int PendingMutatorId;
-var protected string PendingClassPath;
+var protected int PendingEnableMutatorId;
+var protected string PendingEnableClassPath;
+
+var protected bool PendingConfigureOpened;
+var protected bool PendingConfigurePre, PendingConfigurePost;
+var protected int PendingConfigureMutatorId;
+var protected string PendingConfigureClassPath;
 
 var localized string ErrorMessage;
 var localized string ErrorQuery;
@@ -28,6 +33,12 @@ event SceneActivated(bool bInitialActivation)
 	{
 		InitUICheck();
 	}
+	else if (PendingConfigureOpened && PendingConfigureClassPath != "")
+	{
+		PreUpdate(PendingConfigureMutatorId, PendingConfigureClassPath);
+		PendingConfigureOpened = false;
+		PendingConfigureClassPath = "";
+	}
 }
 
 /** Called just after this scene is removed from the active scenes array */
@@ -38,44 +49,74 @@ event SceneDeactivated()
 	CleanupUICheck();
 }
 
+/**
+ * Called when a new scene is opened over this one.  Propagates the values for bRequiresNetwork and bRequiresOnlineService to the new page.
+ */
+function ChildSceneOpened( UIScene NewTopScene )
+{
+	if (PendingConfigurePost)
+	{
+		PendingConfigurePost = false;
+		PendingConfigureOpened = true;
+	}
+
+	super.ChildSceneOpened(NewTopScene);
+}
+
+/** @return Opens the message box scene and returns a reference to it. */
+function UTUIScene_MessageBox GetMessageBoxScene(optional UIScene SceneReference = None)
+{
+	PendingConfigurePre = false;
+	return super.GetMessageBoxScene(SceneReference);
+}
+
+/**
+ * Opens a UI Scene given a reference to a scene to open.
+ *
+ * @param	SceneToOpen		Scene that we want to open.
+ * @param	bSkipAnimation	specify TRUE to indicate that opening animations should be bypassed.
+ * @param	SceneDelegate	if specified, will be called when the scene has finished opening.
+ */
+function UIScene OpenScene(UIScene SceneToOpen, optional bool bSkipAnimation=false, optional delegate<OnSceneActivated> SceneDelegate=None)
+{
+	if (PendingConfigurePre) PendingConfigurePost = true;
+	PendingConfigurePre = false;
+
+	return super.OpenScene(SceneToOpen, bSkipAnimation, SceneDelegate);
+}
+
 /** Modifies the enabled mutator array to enable/disable a mutator. */
 function SetMutatorEnabled(int MutatorId, bool bEnabled)
 {
 	local string error, msg, title;
 	local class<Mutator> Mutclass;
-	local UTUIScene_MessageBox MessageBoxReference;
-
-	PendingMutatorId = INDEX_NONE;
-	PendingClassPath = string(GetClassNameFromIndex(MutatorId));
+	
+	PendingEnableMutatorId = INDEX_NONE;
+	PendingEnableClassPath = string(GetClassNameFromIndex(MutatorId));
 
 	if (bEnabled)
 	{
-		if (IsInConflict(PendingClassPath, error, Mutclass))
+		if (IsInConflict(PendingEnableClassPath, error, Mutclass))
 		{
-			PendingMutatorId = MutatorId;
+			PendingEnableMutatorId = MutatorId;
+			PrintErrorMessageFor(error, Mutclass);
 
-			title = class'TestCWRUI'.static.GetMutatorName(class'TestCentralWeaponReplacement');
-			MessageBoxReference = GetMessageBoxScene();
-
-			msg = ErrorMessage;
-			msg = Repl(msg, "`query", MessageBoxReference != none ? ErrorQuery : "");
-			msg = Repl(msg, "`error", error);
-			msg = Repl(msg, "`mutator", class'TestCWRUI'.static.GetMutatorName(Mutclass));
-			msg = Repl(msg, "  ", Chr(10));
-
-			if(MessageBoxReference != none)
-			{	
-				MessageBoxReference.DisplayAcceptCancelBox(msg, title, OnMutator_Add_Confirm);
-			}
-			else
-			{
-				DisplayMessageBox(msg, title);
-			}
 			return;
 		}
 	}
 
 	SetMutatorEnabledNoCheck(MutatorId, bEnabled);
+}
+
+/** Loads the configuration scene for the currently selected mutator. */
+function OnConfigureMutator()
+{
+	PendingConfigurePre = true;
+	PendingConfigureMutatorId = EnabledList.GetCurrentItem();
+	PendingConfigureClassPath = string(GetClassNameFromIndex(PendingConfigureMutatorId));
+
+	super.OnConfigureMutator();
+	PendingConfigurePre = false;
 }
 
 //**********************************************************************************
@@ -112,7 +153,7 @@ function SetMutatorEnabledNoCheck(int MutatorId, bool bEnabled)
 	
 	cnt = EnabledList.Items.length;
 	super.SetMutatorEnabled(MutatorId, bEnabled);
-	if (cnt != EnabledList.Items.length) PreInit(PendingClassPath, bEnabled);
+	if (cnt != EnabledList.Items.length) PreInit(PendingEnableClassPath, bEnabled);
 }
 
 /** Confirmation for adding conflicting mutator. */
@@ -120,8 +161,28 @@ function OnMutator_Add_Confirm(UTUIScene_MessageBox MessageBox, int SelectedItem
 {
 	if(SelectedItem == 0)
 	{
-		SetMutatorEnabledNoCheck(PendingMutatorId, true);
+		SetMutatorEnabledNoCheck(PendingEnableMutatorId, true);
 	}
+}
+
+function PrintErrorMessageFor(string InError, class<Mutator> Mutclass, optional bool NoQuery)
+{
+	local string msg, title;
+	local UTUIScene_MessageBox MessageBoxReference;
+
+	title = class'TestCWRUI'.static.GetMutatorName(class'TestCentralWeaponReplacement');
+	MessageBoxReference = GetMessageBoxScene();
+	if (MessageBoxReference == none)
+		return;
+
+	msg = ErrorMessage;
+	msg = Repl(msg, "`query", NoQuery ? "" : ErrorQuery);
+	msg = Repl(msg, "`error", InError);
+	msg = Repl(msg, "`mutator", class'TestCWRUI'.static.GetMutatorName(Mutclass));
+	msg = Repl(msg, "  ", Chr(10));
+
+	if(NoQuery) MessageBoxReference.Display(msg, title);
+	else MessageBoxReference.DisplayAcceptCancelBox(msg, title, OnMutator_Add_Confirm);
 }
 
 //**********************************************************************************
@@ -134,7 +195,7 @@ function bool GetMutatorClass(coerce string ClassPath, out class<Mutator> OutCla
 	return OutClass != none;
 }
 
-function bool IsInConflict(string ClassPath, out string ErrorMessage, optional out class<Mutator> OutMutclass)
+function bool IsInConflict(string ClassPath, out string OutErrorMessage, optional out class<Mutator> OutMutclass)
 {
 	local string s;
 	local array<string> strs;
@@ -144,7 +205,7 @@ function bool IsInConflict(string ClassPath, out string ErrorMessage, optional o
 		ParseStringIntoArray(s, strs, Chr(10), false);
 		if (strs.Length > 1 && (strs[0] == "1" || strs[0] ~= "true" || strs[0] ~= "yes"))
 		{
-			ErrorMessage = strs[1];
+			OutErrorMessage = strs[1];
 			return true;
 		}
 	}
@@ -157,6 +218,44 @@ function bool PreInit(string ClassPath, bool bAdd, optional class<Mutator> Mutcl
 	if (Mutclass != none || GetMutatorClass(ClassPath, mutclass))
 	{
 		Mutclass.static.Localize(bAdd ? "PreAdd" : "PreRemove", "", "");
+		return true;
+	}
+
+	return false;
+}
+
+function bool PreUpdate(int MutatorId, string ClassPath, optional class<Mutator> Mutclass)
+{
+	local int i;
+	local string OtherClassPath;
+	local class<Mutator> OtherMutclass;
+	local string msg;
+
+	if (Mutclass != none || GetMutatorClass(ClassPath, mutclass))
+	{
+		Mutclass.static.Localize("PreUpdate", "", "");
+
+		// check current mutator and if 
+		if (IsInConflict(ClassPath, msg))
+		{
+			PrintErrorMessageFor(msg, Mutclass, true);
+		}
+
+		//@TODO: check every following mutator and print multiple error message
+		else
+		{
+			i = EnabledList.Items.Find(MutatorId);
+			for (i=i; i<EnabledList.Items.Length; i++)
+			{
+				OtherClassPath = ""$GetClassNameFromIndex(EnabledList.Items[i]);
+				if (IsInConflict(OtherClassPath, msg, OtherMutclass))
+				{
+					PrintErrorMessageFor(msg, OtherMutclass, true);
+					break;
+				}
+			}
+		}
+
 		return true;
 	}
 

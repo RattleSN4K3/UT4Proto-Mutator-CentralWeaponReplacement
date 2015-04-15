@@ -55,6 +55,11 @@ static private final function bool Unregister(Object Registrar, optional bool bP
 	return class'TestCentralWeaponReplacement'.static.StaticUnRegisterWeaponReplacement(Registrar, bPre);
 }
 
+static private final function bool Update(Object Registrar, bool bBatchOp, optional bool bPre)
+{
+	class'TestCentralWeaponReplacement'.static.StaticUpdateWeaponReplacement(Registrar, bBatchOp, bPre);
+}
+
 //**********************************************************************************
 // UI related static interface functions
 //**********************************************************************************
@@ -67,7 +72,7 @@ static function string Localize( string SectionName, string KeyName, string Pack
 	{
 		if (SectionName ~= "IsConflicting")
 		{
-			return IsConflicting(ErrorMessage) ? "1"$Chr(10)$ErrorMessage : "0";
+			return StaticIsConflicting(ErrorMessage) ? "1"$Chr(10)$ErrorMessage : "0";
 		}
 		else if (SectionName ~= "PreAdd")
 		{
@@ -79,12 +84,17 @@ static function string Localize( string SectionName, string KeyName, string Pack
 			StaticDestroy();
 			return "1";
 		}
+		else if (SectionName ~= "PreUpdate")
+		{
+			StaticUpdate();
+			return "1";
+		}
 	}
 
 	return super.Localize(SectionName, KeyName, PackageName);
 }
 
-static protected function bool IsConflicting(optional out string ErrorMessage)
+static protected function bool StaticIsConflicting(optional out string ErrorMessage)
 {
 	return !RegisterByArray(default.Class, default.WeaponsToReplace, false, true, true, ErrorMessage) ||
 		!RegisterByArray(default.Class, default.AmmoToReplace, true, true, true, ErrorMessage);
@@ -99,6 +109,14 @@ static protected function StaticInitialize()
 static protected function StaticDestroy()
 {
 	Unregister(default.Class, true);
+}
+
+static private final function StaticUpdate()
+{
+	Update(default.Class, true, true);
+	StaticDestroy();
+	StaticInitialize();
+	Update(default.Class, false, true);
 }
 
 DefaultProperties

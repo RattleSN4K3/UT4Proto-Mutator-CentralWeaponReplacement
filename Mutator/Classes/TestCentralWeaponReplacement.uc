@@ -35,14 +35,13 @@ struct ReplacementOptionsInfo
 {
 	/** Whether to replace/remove the weapon */
 	var bool bReplaceWeapon;
-	/** Whether to check for subclasses  */
-	var bool bSubClasses;
 	/** Whether to add the inventory item to the default inventory (on spawn) */
 	var bool bAddToDefault;
 
+	/** Whether to check for subclasses  */
+	var bool bSubClasses;
 	/** Whether to prevent replacing default inventory items (to be used with bSubClasses=true) */
 	var bool bNoDefaultInventory<EditCondition=bSubClasses>;
-
 	/** List of classes to ignore in checking for subclasses */
 	var array<ReplacementIgnoreClassesInfo> IgnoreSubClasses<EditCondition=bSubClasses>;
 
@@ -54,8 +53,9 @@ struct ReplacementOptionsInfo
 	structdefaultproperties
 	{
 		bReplaceWeapon=true
-		bSubClasses=false
 		bAddToDefault=false
+
+		bSubClasses=false
 		bNoDefaultInventory=false
 
 		bAddToLocker=false
@@ -104,6 +104,10 @@ var() const string ParameterProfile;
 var private transient config array<ReplacementInfoEx> StaticWeaponsToReplace;
 /** @ignore */
 var private transient config array<ReplacementInfoEx> StaticAmmoToReplace;
+/** @ignore */
+var private transient config array<name> StaticOrder;
+/** @ignore */
+var private transient config bool StaticBatchOp;
 
 // Config
 // ------------
@@ -428,13 +432,13 @@ function RegisterWeaponReplacement(Object Registrar, name OldClassName, string N
 
 	// ensure empty class path
 	if (NewClassPath ~= "None") NewClassPath = "";
-	NewClassPath = TrimRight(NewClassPath);
+	else NewClassPath = TrimRight(NewClassPath);
 
 	if (bAmmo)
 	{
 		if (IsNewItem(AmmoToReplace, index, OldClassName))
 		{
-			AddWeaponReplacement(AmmoToReplace, Registrar, OldClassName, NewClassPath, ReplacementOptions);
+			AddReplacementToArray(AmmoToReplace, Registrar, OldClassName, NewClassPath, ReplacementOptions);
 		}
 		else if (!(AmmoToReplace[index].NewClassPath ~= NewClassPath))
 		{
@@ -443,7 +447,7 @@ function RegisterWeaponReplacement(Object Registrar, name OldClassName, string N
 	}
 	else if (IsNewItem(WeaponsToReplace, index, OldClassName))
 	{
-		AddWeaponReplacement(WeaponsToReplace, Registrar, OldClassName, NewClassPath, ReplacementOptions);
+		AddReplacementToArray(WeaponsToReplace, Registrar, OldClassName, NewClassPath, ReplacementOptions);
 	}
 	else if (!(WeaponsToReplace[index].NewClassPath ~= NewClassPath))
 	{
@@ -487,14 +491,14 @@ function UnRegisterWeaponReplacement(Object Registrar)
 	}
 }
 
-static function bool StaticRegisterWeaponReplacement(Object Registrar, coerce name OldClassName, string NewClassPath, bool bAmmo, optional ReplacementOptionsInfo ReplacementOptions, optional bool bPre, optional bool bOnlyCheck, optional out string ErrorMessage, optional bool bSilent)
+static function bool StaticRegisterWeaponReplacement(Object Registrar, coerce name OldClassName, string NewClassPath, bool bAmmo, optional ReplacementOptionsInfo ReplacementOptions, optional bool bPre, optional bool bOnlyCheck, optional out string ErrorMessage)
 {
 	local WorldInfo WI;
 	local TestCentralWeaponReplacement mut;
 
 	if (bPre)
 	{
-		return StaticPreRegisterWeaponReplacement(Registrar, OldClassName, NewClassPath, bAmmo, ReplacementOptions, bOnlyCheck, ErrorMessage, bSilent);
+		return StaticPreRegisterWeaponReplacement(Registrar, OldClassName, NewClassPath, bAmmo, ReplacementOptions, bOnlyCheck, ErrorMessage);
 	}
 
 	if (Registrar == none)
@@ -518,14 +522,14 @@ static function bool StaticRegisterWeaponReplacement(Object Registrar, coerce na
 	return true;
 }
 
-static function bool StaticUnRegisterWeaponReplacement(Object Registrar, optional bool bPre, optional bool bSilent, optional out string ErrorMessage)
+static function bool StaticUnRegisterWeaponReplacement(Object Registrar, optional bool bPre, optional out string ErrorMessage)
 {
 	local WorldInfo WI;
 	local TestCentralWeaponReplacement mut;
 
 	if (bPre)
 	{
-		return StaticPreUnRegisterWeaponReplacement(Registrar, bSilent, ErrorMessage);
+		return StaticPreUnRegisterWeaponReplacement(Registrar, ErrorMessage);
 	}
 	
 	if (Registrar == none)
@@ -547,6 +551,18 @@ static function bool StaticUnRegisterWeaponReplacement(Object Registrar, optiona
 	// register the weapon replacement
 	mut.UnRegisterWeaponReplacement(Registrar);
 	return true;
+}
+
+/** Remove registered replacements but keep order */
+static function StaticUpdateWeaponReplacement(Object Registrar, bool bBatchOp, optional bool bPre)
+{
+	if (bPre)
+	{
+		StaticPreUpdateWeaponReplacement(Registrar, bBatchOp);
+		return;
+	}
+
+	//@TODO: implement runtime changes update
 }
 
 /** Create/Find the currently spawned mutator
@@ -598,6 +614,8 @@ static function StaticPreInitialize()
 
 	default.StaticWeaponsToReplace.Length = 0;
 	default.StaticAmmoToReplace.Length = 0;
+	default.StaticOrder.Length = 0;
+	default.StaticBatchOp = false;
 
 	if (GetStaticMutator(MutatorObj))
 	{
@@ -617,6 +635,8 @@ static function StaticPreDestroy()
 
 	default.StaticWeaponsToReplace.Length = 0;
 	default.StaticAmmoToReplace.Length = 0;
+	default.StaticOrder.Length = 0;
+	default.StaticBatchOp = false;
 
 	if (GetStaticMutator(MutatorObj) && MutatorObj.DataCache != none)
 	{
@@ -625,40 +645,57 @@ static function StaticPreDestroy()
 	}
 }
 
-static function bool StaticPreRegisterWeaponReplacement(Object Registrar, name OldClassName, string NewClassPath, bool bAmmo, ReplacementOptionsInfo ReplacementOptions, optional bool bOnlyCheck, optional out string ErrorMessage, optional bool bBatchOp)
+static private function bool StaticPreRegisterWeaponReplacement(Object Registrar, name OldClassName, string NewClassPath, bool bAmmo, ReplacementOptionsInfo ReplacementOptions, optional bool bOnlyCheck, optional out string ErrorMessage)
 {
 	local int index;
+	local name RegistrarName;
 
 	// ensure empty class path
 	if (NewClassPath ~= "None") NewClassPath = "";
-	NewClassPath = TrimRight(NewClassPath);
+	else NewClassPath = TrimRight(NewClassPath);
+
+	RegistrarName = Registrar != none ? Registrar.Name : '';
+	if (!bOnlyCheck && default.StaticOrder.Find(RegistrarName) == INDEX_NONE)
+	{
+		default.StaticOrder.AddItem(RegistrarName);
+	}
 
 	if (bAmmo)
 	{
 		if (IsNewItem(default.StaticAmmoToReplace, index, OldClassName))
 		{
-			if (!bOnlyCheck) AddWeaponReplacement(default.StaticAmmoToReplace, Registrar, OldClassName, NewClassPath, ReplacementOptions);
+			if (!bOnlyCheck)
+			{
+				if (default.StaticBatchOp) index = StaticPreGetInsertIndex(default.StaticAmmoToReplace, Registrar);
+				AddReplacementToArray(default.StaticAmmoToReplace, Registrar, OldClassName, NewClassPath, ReplacementOptions, index);
+			}
 			return true;
 		}
 		else if (!(default.StaticAmmoToReplace[index].NewClassPath ~= NewClassPath))
 		{
 			ErrorMessage = class'TestCWRUI'.static.GetData().GetErrorMessage(default.StaticAmmoToReplace[index].Registrar, Registrar, OldClassName, NewClassPath);
+			return false;
 		}
 	}
 	else if (IsNewItem(default.StaticWeaponsToReplace, index, OldClassName))
 	{
-		if (!bOnlyCheck) AddWeaponReplacement(default.StaticWeaponsToReplace, Registrar, OldClassName, NewClassPath, ReplacementOptions);
+		if (!bOnlyCheck)
+		{
+			if (default.StaticBatchOp) index = StaticPreGetInsertIndex(default.StaticWeaponsToReplace, Registrar);
+			AddReplacementToArray(default.StaticWeaponsToReplace, Registrar, OldClassName, NewClassPath, ReplacementOptions, index);
+		}
 		return true;
 	}
 	else if (!(default.StaticWeaponsToReplace[index].NewClassPath ~= NewClassPath))
 	{
 		ErrorMessage = class'TestCWRUI'.static.GetData().GetErrorMessage(default.StaticWeaponsToReplace[index].Registrar, Registrar, OldClassName, NewClassPath);
+		return false;
 	}
 
-	return false;
+	return true;
 }
 
-static function bool StaticPreUnRegisterWeaponReplacement(Object Registrar, optional bool bSilent, optional out string ErrorMessage)
+static private function bool StaticPreUnRegisterWeaponReplacement(Object Registrar, optional out string ErrorMessage)
 {
 	local int i;
 	local bool bAnyRemoved;
@@ -689,14 +726,46 @@ static function bool StaticPreUnRegisterWeaponReplacement(Object Registrar, opti
 		}
 	}
 
+	// remove order entry (skip otherwise to keep order for updating)
+	if (!default.StaticBatchOp) default.StaticOrder.RemoveItem(Registrar.Name);
+
 	return bAnyRemoved;
+}
+
+static private function StaticPreUpdateWeaponReplacement(Object Registrar, bool bBatchOp)
+{
+	default.StaticBatchOp = bBatchOp;
+}
+
+static private function int StaticPreGetInsertIndex(out array<ReplacementInfoEx> arr, Object Registrar)
+{
+	local int i;
+	local name RegistrarName, PreName;
+	local bool bFound;
+	i = default.StaticOrder.Find(Registrar.Name);
+	if (i == 0)
+	{
+		return 0;
+	}
+	else if (i > 0)
+	{
+		PreName = default.StaticOrder[i-1];
+		for (i=0; i<arr.Length; i++)
+		{
+			RegistrarName = arr[i].Registrar != none ? arr[i].Registrar.Name : '';
+			if (!bFound && RegistrarName == PreName) bFound = true;
+			if (bFound && RegistrarName != PreName) return i;
+		}
+	}
+
+	return INDEX_NONE;
 }
 
 //**********************************************************************************
 // Private functions
 //**********************************************************************************
 
-static private function AddWeaponReplacement(out array<ReplacementInfoEx> arr, Object Registrar, name OldClassName, string NewClassPath, ReplacementOptionsInfo ReplacementOptions)
+static private function AddReplacementToArray(out array<ReplacementInfoEx> arr, Object Registrar, name OldClassName, string NewClassPath, ReplacementOptionsInfo ReplacementOptions, optional int InsertIndex = INDEX_NONE)
 {
 	local ReplacementInfoEx item;
 	item.OldClassName = OldClassName;
@@ -704,7 +773,8 @@ static private function AddWeaponReplacement(out array<ReplacementInfoEx> arr, O
 	item.Registrar = Registrar;
 	item.Options = ReplacementOptions;
 
-	arr.AddItem(item);
+	if (InsertIndex == INDEX_NONE || InsertIndex > arr.Length-1) arr.AddItem(item);
+	else arr.InsertItem(InsertIndex, item);
 }
 
 private function AddErrorMessage(Object Conflicting, Object Registrar, name OldClassName, string NewClassPath)
