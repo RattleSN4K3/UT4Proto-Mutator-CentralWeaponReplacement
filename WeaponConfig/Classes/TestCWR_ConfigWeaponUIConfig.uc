@@ -99,12 +99,15 @@ function OnBack()
 function OnAccept()
 {
 	local int index;
+	local ReplacementOptionsInfo defaultoptions;
 
 	index = WeaponCombo.ComboList.GetCurrentItem();
 	if (WeaponCombo.ComboList.Items.Length > 0 && index != INDEX_NONE)
 	{
 		class'TestCWR_ConfigWeaponMutatorCWR'.default.ReplaceWeaponClassName = WeaponClassNames[index];
 		class'TestCWR_ConfigWeaponMutatorCWR'.default.ReplaceAmmoClassName = GetClassName(WeaponProviders[index].AmmoClassPath);
+		class'TestCWR_ConfigWeaponMutatorCWR'.default.ReplaceWeaponOptions = defaultoptions;
+		class'TestCWR_ConfigWeaponMutatorCWR'.default.ReplaceAmmoOptions = defaultoptions;
 		class'TestCWR_ConfigWeaponMutatorCWR'.static.StaticSaveConfig();
 	}
 
