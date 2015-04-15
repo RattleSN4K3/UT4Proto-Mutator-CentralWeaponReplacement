@@ -16,6 +16,28 @@ event PostBeginPlay()
 	}
 }
 
+static protected function bool StaticIsConflicting(optional out string ErrorMessage)
+{
+	if (!super.StaticIsConflicting() && default.ReplaceWeaponClassName != '')
+	{
+		return !RegisterWeaponReplacement(default.Class, default.ReplaceWeaponClassName, PathName(class'TestCWR_RipperWeapon'), false,, true, true, ErrorMessage) ||
+			!RegisterWeaponReplacement(default.Class, default.ReplaceWeaponClassName, PathName(class'TestCWR_RipperAmmo'), true,, true, true, ErrorMessage);
+	}
+	
+	return false;
+}
+
+static protected function StaticInitialize()
+{
+	super.StaticInitialize();
+
+	if (default.ReplaceWeaponClassName != '')
+	{
+		RegisterWeaponReplacement(default.Class, default.ReplaceWeaponClassName, PathName(class'TestCWR_RipperWeapon'), false,, true);
+		RegisterWeaponReplacement(default.Class, default.ReplaceAmmoClassName, PathName(class'TestCWR_RipperAmmo'), true,, true);
+	}
+}
+
 DefaultProperties
 {
 	ReplaceWeaponClassName="UTWeap_BioRifle_Content"
