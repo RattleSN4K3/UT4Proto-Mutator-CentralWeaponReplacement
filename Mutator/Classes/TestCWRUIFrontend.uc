@@ -70,13 +70,7 @@ function UTUIScene_MessageBox GetMessageBoxScene(optional UIScene SceneReference
 	return super.GetMessageBoxScene(SceneReference);
 }
 
-/**
- * Opens a UI Scene given a reference to a scene to open.
- *
- * @param	SceneToOpen		Scene that we want to open.
- * @param	bSkipAnimation	specify TRUE to indicate that opening animations should be bypassed.
- * @param	SceneDelegate	if specified, will be called when the scene has finished opening.
- */
+/** Opens a UI Scene given a reference to a scene to open. */
 function UIScene OpenScene(UIScene SceneToOpen, optional bool bSkipAnimation=false, optional delegate<OnSceneActivated> SceneDelegate=None)
 {
 	if (PendingConfigurePre) PendingConfigurePost = true;
@@ -88,7 +82,7 @@ function UIScene OpenScene(UIScene SceneToOpen, optional bool bSkipAnimation=fal
 /** Modifies the enabled mutator array to enable/disable a mutator. */
 function SetMutatorEnabled(int MutatorId, bool bEnabled)
 {
-	local string error, msg, title;
+	local string error;
 	local class<Mutator> Mutclass;
 	
 	PendingEnableMutatorId = INDEX_NONE;
@@ -181,7 +175,7 @@ function PrintErrorMessageFor(string InError, class<Mutator> Mutclass, optional 
 	msg = Repl(msg, "`mutator", class'TestCWRUI'.static.GetMutatorName(Mutclass));
 	msg = Repl(msg, "  ", Chr(10));
 
-	if(NoQuery) MessageBoxReference.Display(msg, title);
+	if (NoQuery) MessageBoxReference.Display(msg, title);
 	else MessageBoxReference.DisplayAcceptCancelBox(msg, title, OnMutator_Add_Confirm);
 }
 

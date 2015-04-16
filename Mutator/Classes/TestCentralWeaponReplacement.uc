@@ -21,13 +21,13 @@ struct ReplacementIgnoreClassesInfo
 
 struct ReplacementLockerInfo
 {
-	/** List of Locker names to add the weapon to  */
+	/** List of Locker names to add/remove the weapon to/from  */
 	var array<name> Names;
 
-	/** List of Locker groups to add the weapon to  */
+	/** List of Locker groups to add/remove the weapon to/from  */
 	var array<name> Groups;
 
-	/** List of Locker tag to add the weapon to  */
+	/** List of Locker tag to add/remove the weapon to/from  */
 	var array<name> Tags;
 };
 
@@ -89,6 +89,15 @@ struct TemplateInfo
 
 	/** Flag. Set whether to append the package name (of the current package) to the NewClassPath field */
 	var bool AddPackage;
+};
+
+struct TemplateDynamicInfo
+{
+	/** Info about the replacement */
+	var TemplateInfo Template;
+
+	/** whether the replacement is type of Ammo */
+	var bool bAmmo;
 };
 
 //**********************************************************************************
@@ -181,6 +190,12 @@ function InitMutator(string Options, out string ErrorMessage)
 	{
 		for (j=0; j<WeaponsToReplace.Length; j++)
 		{
+			WeaponClass = none;
+			if (ClassPathValid(WeaponsToReplace[j].NewClassPath))
+			{
+				WeaponClass = class<UTWeapon>(DynamicLoadObject(WeaponsToReplace[j].NewClassPath, class'Class'));
+			}
+
 			if (WeaponsToReplace[j].OldClassName != '' && WeaponsToReplace[j].Options.bReplaceWeapon && !WeaponsToReplace[j].Options.bNoDefaultInventory)
 			{
 				for (i=0; i<G.DefaultInventory.length; i++)
@@ -191,33 +206,27 @@ function InitMutator(string Options, out string ErrorMessage)
 					// IsA doesn't work for abstract classes, we need to use the workaround/hackfix
 					if (WeaponsToReplace[j].Options.bSubClasses && !IsSubClass(G.DefaultInventory[i], WeaponsToReplace[j].OldClassName)) continue;
 
-					if (!ClassPathValid(WeaponsToReplace[j].NewClassPath))
+					if (WeaponClass == none)
 					{
-						// replace with nothing
+						// remove from inventory
 						G.DefaultInventory.Remove(i, 1);
-						i--;
-						continue;
 					}
-					else
+					else if (WeaponsToReplace[j].Options.bReplaceWeapon)
 					{
-						WeaponClass = class<UTWeapon>(DynamicLoadObject(WeaponsToReplace[j].NewClassPath, class'Class'));
-						if (WeaponsToReplace[j].Options.bReplaceWeapon)
-						{
-							G.DefaultInventory[i] = WeaponClass;
-						}
+						G.DefaultInventory[i] = WeaponClass;
 					}
 				}
 			}
 
-			if (WeaponsToReplace[j].Options.bAddToDefault && ClassPathValid(WeaponsToReplace[j].NewClassPath))
+			// add to default inventory by request
+			if (WeaponsToReplace[j].Options.bAddToDefault && WeaponClass != none)
 			{
-				WeaponClass = class<UTWeapon>(DynamicLoadObject(WeaponsToReplace[j].NewClassPath, class'Class'));
-				if (WeaponClass != none) G.DefaultInventory.AddItem(WeaponClass);
+				G.DefaultInventory.AddItem(WeaponClass);
 			}
 
+			// add to weapon lockers by request
 			if (WeaponsToReplace[j].Options.bAddToLocker)
 			{
-				WeaponClass = class<UTWeapon>(DynamicLoadObject(WeaponsToReplace[j].NewClassPath, class'Class'));
 				AddToLocker(WeaponClass, WeaponsToReplace[j].Options.LockerOptions);
 			}
 		}
@@ -227,14 +236,14 @@ function InitMutator(string Options, out string ErrorMessage)
 			j = WeaponsToReplace.Find('OldClassName', G.TranslocatorClass.Name);
 			if (j != INDEX_NONE)
 			{
-				if (WeaponsToReplace[j].NewClassPath == "" || !WeaponsToReplace[j].Options.bReplaceWeapon)
+				if (WeaponClass == none || !WeaponsToReplace[j].Options.bReplaceWeapon)
 				{
 					// replace with nothing
 					G.TranslocatorClass = None;
 				}
 				else
 				{
-					G.TranslocatorClass = class<UTWeapon>(DynamicLoadObject(WeaponsToReplace[j].NewClassPath, class'Class'));
+					G.TranslocatorClass = WeaponClass;
 				}
 			}
 		}
@@ -470,25 +479,8 @@ function RegisterWeaponReplacementArray(Object Registrar, array<TemplateInfo> Re
 
 function UnRegisterWeaponReplacement(Object Registrar)
 {
-	local int i;
-
-	for (i=0; i<WeaponsToReplace.Length; i++)
-	{
-		if (WeaponsToReplace[i].Registrar == Registrar)
-		{
-			WeaponsToReplace.Remove(i, 1);
-			i--;
-		}
-	}
-
-	for (i=0; i<AmmoToReplace.Length; i++)
-	{
-		if (AmmoToReplace[i].Registrar == Registrar)
-		{
-			AmmoToReplace.Remove(i, 1);
-			i--;
-		}
-	}
+	RemoveReplacementFromArray(WeaponsToReplace, Registrar);
+	RemoveReplacementFromArray(AmmoToReplace, Registrar);
 }
 
 static function bool StaticRegisterWeaponReplacement(Object Registrar, coerce name OldClassName, string NewClassPath, bool bAmmo, optional ReplacementOptionsInfo ReplacementOptions, optional bool bPre, optional bool bOnlyCheck, optional out string ErrorMessage)
@@ -546,9 +538,13 @@ static function bool StaticUnRegisterWeaponReplacement(Object Registrar, optiona
 	}
 
 	// spawn/create mutator
-	EnsureMutator(WI, mut);
+	if (!EnsureMutator(WI, mut, true))
+	{
+		ErrorMessage = "No Mutator found.";
+		return false;
+	}
 
-	// register the weapon replacement
+	// unregister the weapon replacement
 	mut.UnRegisterWeaponReplacement(Registrar);
 	return true;
 }
@@ -581,14 +577,14 @@ static function bool EnsureWorld(Object Registrar, out WorldInfo OutWorldInfo)
 /** Create/Find the currently spawned mutator
  * @return true if newly created
  */
-static function bool EnsureMutator(WorldInfo WI, out TestCentralWeaponReplacement OutMut)
+static function bool EnsureMutator(WorldInfo WI, out TestCentralWeaponReplacement OutMut, optional bool NoCreation)
 {
 	// try to find an existent gneric mutator
 	foreach WI.DynamicActors(class'TestCentralWeaponReplacement', OutMut)
 		break;
 
 	// if not mutator was found, create one
-	if (OutMut == none)
+	if (OutMut == none && !NoCreation)
 	{
 		OutMut = WI.Spawn(class'TestCentralWeaponReplacement', WI.Game);
 		if (WI.Game != none)
@@ -697,7 +693,6 @@ static private function bool StaticPreRegisterWeaponReplacement(Object Registrar
 
 static private function bool StaticPreUnRegisterWeaponReplacement(Object Registrar, optional out string ErrorMessage)
 {
-	local int i;
 	local bool bAnyRemoved;
 
 	if (Registrar == none)
@@ -706,25 +701,8 @@ static private function bool StaticPreUnRegisterWeaponReplacement(Object Registr
 		return false;
 	}
 
-	for (i=0; i<default.StaticWeaponsToReplace.Length; i++)
-	{
-		if (default.StaticWeaponsToReplace[i].Registrar == Registrar)
-		{
-			bAnyRemoved = true;
-			default.StaticWeaponsToReplace.Remove(i, 1);
-			i--;
-		}
-	}
-
-	for (i=0; i<default.StaticAmmoToReplace.Length; i++)
-	{
-		if (default.StaticAmmoToReplace[i].Registrar == Registrar)
-		{
-			bAnyRemoved = true;
-			default.StaticAmmoToReplace.Remove(i, 1);
-			i--;
-		}
-	}
+	bAnyRemoved = RemoveReplacementFromArray(default.StaticWeaponsToReplace, Registrar) || bAnyRemoved;
+	bAnyRemoved = RemoveReplacementFromArray(default.StaticAmmoToReplace, Registrar) || bAnyRemoved;
 
 	// remove order entry (skip otherwise to keep order for updating)
 	if (!default.StaticBatchOp) default.StaticOrder.RemoveItem(Registrar.Name);
@@ -777,6 +755,22 @@ static private function AddReplacementToArray(out array<ReplacementInfoEx> arr, 
 	else arr.InsertItem(InsertIndex, item);
 }
 
+static private function bool RemoveReplacementFromArray(out array<ReplacementInfoEx> arr, Object Registrar)
+{
+	local int i;
+	local bool bRemoved; 
+	for (i=arr.Length-1; i>=0; i--)
+	{
+		if (arr[i].Registrar == Registrar)
+		{
+			bRemoved = true;
+			arr.Remove(i, 1);
+		}
+	}
+
+	return bRemoved;
+}
+
 private function AddErrorMessage(Object Conflicting, Object Registrar, name OldClassName, string NewClassPath)
 {
 	local int index;
@@ -788,29 +782,33 @@ private function AddErrorMessage(Object Conflicting, Object Registrar, name OldC
 	ErrorMessages[index].NewClassPath = NewClassPath;
 }
 
-function AddToLocker(class<UTWeapon> WeaponClass, ReplacementLockerInfo LockerOptions)
+function AddToLocker(class<UTWeapon> WeaponClass, ReplacementLockerInfo LockerOptions, optional bool bRemove)
 {
 	local UTWeaponLocker Locker;
 	local WeaponEntry ent;
-	local bool bToAll;
+	local bool bAll;
+	local int index;
 
 	if (WeaponClass == none)
 		return;
 
-	bToAll = LockerOptions.Names.Length == 0 && LockerOptions.Groups.Length == 0 && LockerOptions.Tags.Length == 0;
+	bAll = LockerOptions.Names.Length == 0 && LockerOptions.Groups.Length == 0 && LockerOptions.Tags.Length == 0;
 	foreach DynamicActors(class'UTWeaponLocker', Locker)
 	{
-		if (bToAll || LockerOptions.Names.Find(Locker.Name) != INDEX_NONE ||
-			LockerOptions.Groups.Find(Locker.Group) != INDEX_NONE ||
-			LockerOptions.Tags.Find(Locker.Group) != INDEX_NONE)
+		if (bAll || ShouldBeReplacedLocker(Locker, LockerOptions))
 		{
-			ent.WeaponClass = WeaponClass;
-			Locker.MaxDesireability += WeaponClass.Default.AIRating;
+			index = Locker.Weapons.Find('WeaponClass', WeaponClass);
+			if (bRemove && index != INDEX_NONE)
+			{
+				Locker.Weapons.Remove(index, 1);
+			}
+			else if (!bRemove && index == INDEX_NONE)
+			{
+				ent.WeaponClass = WeaponClass;
+				Locker.MaxDesireability += WeaponClass.Default.AIRating;
 
-			//if (WeaponClass.default.PickupFactoryMesh != none)
-			//	ent.PickupMesh = WeaponClass.default.PickupFactoryMesh;
-
-			Locker.Weapons.AddItem(ent);
+				Locker.Weapons.AddItem(ent);
+			}
 		}
 	}
 }
@@ -970,6 +968,4 @@ Defaultproperties
 	GroupNames[0]="WEAPONMOD"
 
 	ParameterProfile="CWRMapProfile"
-
-	MessageErrors="Some errors occurred in replacing weapons:    `errors"
 }
