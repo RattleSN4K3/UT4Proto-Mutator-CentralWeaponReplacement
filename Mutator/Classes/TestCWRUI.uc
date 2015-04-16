@@ -402,6 +402,7 @@ DefaultProperties
 	DialogBadColor="R=1.0,G=0.5,B=0.5,A=1"
 	DialogGoodColor="R=0.1328125,G=0.69140625,B=0.296875,A=1"
 
+	MessageErrors="Some errors occurred in replacing weapons:    `errors"
 	MessageClassReplacedBy="The mutator `already is already replacing `old."
 	MessageClassReplacedDefault="`old is already replaced by the default configuration."
 	MessageClassSubstBy="`new cannot be added by `mutator."
