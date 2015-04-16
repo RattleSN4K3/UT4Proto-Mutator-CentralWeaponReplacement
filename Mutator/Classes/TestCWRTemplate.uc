@@ -5,31 +5,48 @@ class TestCWRTemplate extends UTMutator
 
 var array<TemplateInfo> WeaponsToReplace;
 var array<TemplateInfo> AmmoToReplace;
+ 
+var const bool bAutoDestroy;
 
 event PreBeginPlay()
 {
 	local array<TemplateDynamicInfo> Replacements;
 	local int i;
+	local Object Registrar;
 
 	super.PreBeginPlay();
 
 	if (!IsPendingKill())
 	{
-		RegisterByArray(self, WeaponsToReplace, false);
-		RegisterByArray(self, AmmoToReplace, true);
+		Registrar = GetRegistrar();
+		RegisterByArray(Registrar, WeaponsToReplace, false);
+		RegisterByArray(Registrar, AmmoToReplace, true);
 
 		StaticGetDynamicReplacements(Replacements);
 		for (i=0; i<Replacements.Length; i++)
 		{
-			RegisterByInfo(self, Replacements[i].Template, Replacements[i].bAmmo);
+			RegisterByInfo(Registrar, Replacements[i].Template, Replacements[i].bAmmo);
+		}
+
+		if (bAutoDestroy)
+		{
+			Destroy();
 		}
 	}
 }
 
 event Destroyed()
 {
-	Unregister(self);
+	if (!bAutoDestroy)
+	{
+		Unregister(self);
+	}
 	Super.Destroyed();
+}
+
+protected final function Object GetRegistrar()
+{
+	return bAutoDestroy ? class : self;
 }
 
 static private final function bool RegisterByArray(Object Registrar, array<TemplateInfo> ItemsToReplace, bool bAmmo, optional bool bPre, optional bool bOnlyCheck, optional out string ErrorMessage)
