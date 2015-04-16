@@ -258,7 +258,7 @@ function bool PreUpdate(int MutatorId, string ClassPath, optional class<Mutator>
 
 DefaultProperties
 {
-	ErrorMessage="Unable to add `mutator.  `error`query"
+	ErrorMessage="Unable to add `mutator.    `error`query"
 	ErrorQuery="    Do you want to continue enabling the mutator?"
 }
 
