@@ -34,7 +34,7 @@ struct ReplacementLockerInfo
 struct ReplacementOptionsInfo
 {
 	/** Whether to replace/remove the weapon */
-	var bool bReplaceWeapon;
+	var bool bNoReplaceWeapon;
 	/** Whether to add the inventory item to the default inventory (on spawn) */
 	var bool bAddToDefault;
 
@@ -50,9 +50,11 @@ struct ReplacementOptionsInfo
 	/** Options to specify to which Locker the weapon should be added */
 	var ReplacementLockerInfo LockerOptions;
 	
+	// struct defaultproperties doesn't work for template mutators default props
+	// Note: Don't change anything to a different value than the default one
 	structdefaultproperties
 	{
-		bReplaceWeapon=true
+		bNoReplaceWeapon=false
 		bAddToDefault=false
 
 		bSubClasses=false
@@ -89,6 +91,11 @@ struct TemplateInfo
 
 	/** Flag. Set whether to append the package name (of the current package) to the NewClassPath field */
 	var bool AddPackage;
+
+	structdefaultproperties
+	{
+		Options=()
+	}
 };
 
 struct TemplateDynamicInfo
@@ -196,7 +203,7 @@ function InitMutator(string Options, out string ErrorMessage)
 				WeaponClass = class<UTWeapon>(DynamicLoadObject(WeaponsToReplace[j].NewClassPath, class'Class'));
 			}
 
-			if (WeaponsToReplace[j].OldClassName != '' && WeaponsToReplace[j].Options.bReplaceWeapon && !WeaponsToReplace[j].Options.bNoDefaultInventory)
+			if (WeaponsToReplace[j].OldClassName != '' && !WeaponsToReplace[j].Options.bNoReplaceWeapon && !WeaponsToReplace[j].Options.bNoDefaultInventory)
 			{
 				for (i=0; i<G.DefaultInventory.length; i++)
 				{
@@ -211,7 +218,7 @@ function InitMutator(string Options, out string ErrorMessage)
 						// remove from inventory
 						G.DefaultInventory.Remove(i, 1);
 					}
-					else if (WeaponsToReplace[j].Options.bReplaceWeapon)
+					else if (!WeaponsToReplace[j].Options.bNoReplaceWeapon)
 					{
 						G.DefaultInventory[i] = WeaponClass;
 					}
@@ -236,7 +243,7 @@ function InitMutator(string Options, out string ErrorMessage)
 			j = WeaponsToReplace.Find('OldClassName', G.TranslocatorClass.Name);
 			if (j != INDEX_NONE)
 			{
-				if (WeaponClass == none || !WeaponsToReplace[j].Options.bReplaceWeapon)
+				if (WeaponClass == none || WeaponsToReplace[j].Options.bNoReplaceWeapon)
 				{
 					// replace with nothing
 					G.TranslocatorClass = None;
@@ -273,7 +280,7 @@ function bool CheckReplacement(Actor Other)
 	{
 		if (WeaponPickup.WeaponPickupClass != None)
 		{
-			if (ShouldBeReplaced(index, WeaponPickup.WeaponPickupClass, false) && WeaponsToReplace[index].Options.bReplaceWeapon)
+			if (ShouldBeReplaced(index, WeaponPickup.WeaponPickupClass, false) && !WeaponsToReplace[index].Options.bNoReplaceWeapon)
 			{
 				if (WeaponsToReplace[index].NewClassPath == "")
 				{
@@ -294,7 +301,7 @@ function bool CheckReplacement(Actor Other)
 			{
 				if (Locker.Weapons[i].WeaponClass != none &&
 					ShouldBeReplaced(index, Locker.Weapons[i].WeaponClass, false) &&
-					WeaponsToReplace[index].Options.bReplaceWeapon &&
+					WeaponsToReplace[index].Options.bNoReplaceWeapon == false &&
 					ShouldBeReplacedLocker(Locker, WeaponsToReplace[index].Options.LockerOptions))
 				{
 					if (WeaponsToReplace[index].NewClassPath == "")
@@ -314,7 +321,7 @@ function bool CheckReplacement(Actor Other)
 			AmmoPickup = UTAmmoPickupFactory(Other);
 			if (AmmoPickup.Class != none)
 			{
-				if (ShouldBeReplaced(index, AmmoPickup.Class, true) && AmmoToReplace[index].Options.bReplaceWeapon)
+				if (ShouldBeReplaced(index, AmmoPickup.Class, true) && !AmmoToReplace[index].Options.bNoReplaceWeapon)
 				{
 					if (AmmoToReplace[index].NewClassPath == "")
 					{
