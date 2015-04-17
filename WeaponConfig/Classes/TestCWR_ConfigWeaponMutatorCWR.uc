@@ -10,8 +10,8 @@ static function StaticGetDynamicReplacements(out array<TemplateDynamicInfo> Repl
 {
 	if (default.ReplaceWeaponClassName != '')
 	{
-		Replacements.AddItem(CreateTemplate(false, default.ReplaceWeaponClassName, PathName(class'TestCWR_RipperWeapon'), default.ReplaceWeaponOptions));
-		Replacements.AddItem(CreateTemplate(true, default.ReplaceAmmoClassName, PathName(class'TestCWR_RipperAmmo'), default.ReplaceAmmoOptions));
+		Replacements.AddItem(CreateTemplate(RT_Weapon, default.ReplaceWeaponClassName, PathName(class'TestCWR_RipperWeapon'), default.ReplaceWeaponOptions));
+		Replacements.AddItem(CreateTemplate(RT_Ammo, default.ReplaceAmmoClassName, PathName(class'TestCWR_RipperAmmo'), default.ReplaceAmmoOptions));
 	}
 }
 

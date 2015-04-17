@@ -11,6 +11,7 @@ var config string MapName;
 
 var config array<TemplateInfo> WeaponsToReplace;
 var config array<TemplateInfo> AmmoToReplace;
+var config array<TemplateInfo> ArmorToReplace;
 
 //**********************************************************************************
 // Static functions

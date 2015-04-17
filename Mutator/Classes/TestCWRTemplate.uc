@@ -5,6 +5,7 @@ class TestCWRTemplate extends UTMutator
 
 var array<TemplateInfo> WeaponsToReplace;
 var array<TemplateInfo> AmmoToReplace;
+var array<TemplateInfo> ArmorToReplace;
  
 var const bool bAutoDestroy;
 
@@ -19,13 +20,14 @@ event PreBeginPlay()
 	if (!IsPendingKill())
 	{
 		Registrar = GetRegistrar();
-		RegisterByArray(Registrar, WeaponsToReplace, false);
-		RegisterByArray(Registrar, AmmoToReplace, true);
+		RegisterByArray(Registrar, WeaponsToReplace, RT_Weapon);
+		RegisterByArray(Registrar, AmmoToReplace, RT_Ammo);
+		RegisterByArray(Registrar, ArmorToReplace, RT_Armor);
 
 		StaticGetDynamicReplacements(Replacements);
 		for (i=0; i<Replacements.Length; i++)
 		{
-			RegisterByInfo(Registrar, Replacements[i].Template, Replacements[i].bAmmo);
+			RegisterByInfo(Registrar, Replacements[i].Template, Replacements[i].Type);
 		}
 
 		if (bAutoDestroy)
@@ -49,13 +51,13 @@ protected final function Object GetRegistrar()
 	return bAutoDestroy ? class : self;
 }
 
-static private final function bool RegisterByArray(Object Registrar, array<TemplateInfo> ItemsToReplace, bool bAmmo, optional bool bPre, optional bool bOnlyCheck, optional out string ErrorMessage)
+static private final function bool RegisterByArray(Object Registrar, array<TemplateInfo> ItemsToReplace, EReplacementType ReplacementType, optional bool bPre, optional bool bOnlyCheck, optional out string ErrorMessage)
 {
 	local int i;
 
 	for (i=0; i<ItemsToReplace.Length; i++)
 	{
-		if (!RegisterByInfo(Registrar, ItemsToReplace[i], bAmmo, bPre, bOnlyCheck, ErrorMessage))
+		if (!RegisterByInfo(Registrar, ItemsToReplace[i], ReplacementType, bPre, bOnlyCheck, ErrorMessage))
 		{
 			return false;
 		}
@@ -64,14 +66,14 @@ static private final function bool RegisterByArray(Object Registrar, array<Templ
 	return true;
 }
 
-static private final function bool RegisterByInfo(Object Registrar, TemplateInfo item, bool bAmmo, optional bool bPre, optional bool bOnlyCheck, optional out string ErrorMessage)
+static private final function bool RegisterByInfo(Object Registrar, TemplateInfo item, EReplacementType ReplacementType, optional bool bPre, optional bool bOnlyCheck, optional out string ErrorMessage)
 {
 	local string path;
 
 	path = item.NewClassPath;
 	if (item.AddPackage && Registrar != none) path = (class(Registrar) != none ? Registrar.GetPackageName() : Registrar.Class.GetPackageName())$"."$path;
 
-	if (!RegisterWeaponReplacement(Registrar, item.OldClassName, path, bAmmo, item.Options, bPre, bOnlyCheck, ErrorMessage))
+	if (!RegisterWeaponReplacement(Registrar, item.OldClassName, path, ReplacementType, item.Options, bPre, bOnlyCheck, ErrorMessage))
 	{
 		if (bOnlyCheck)
 		{
@@ -82,9 +84,9 @@ static private final function bool RegisterByInfo(Object Registrar, TemplateInfo
 	return true;
 }
 
-static protected final function bool RegisterWeaponReplacement(Object Registrar, coerce name OldClassName, string NewClassPath, bool bAmmo, optional ReplacementOptionsInfo ReplacementOptions, optional bool bPre, optional bool bOnlyCheck, optional out string ErrorMessage)
+static protected final function bool RegisterWeaponReplacement(Object Registrar, coerce name OldClassName, string NewClassPath, EReplacementType ReplacementType, optional ReplacementOptionsInfo ReplacementOptions, optional bool bPre, optional bool bOnlyCheck, optional out string ErrorMessage)
 {
-	return class'TestCentralWeaponReplacement'.static.StaticRegisterWeaponReplacement(Registrar, OldClassName, NewClassPath, bAmmo, ReplacementOptions, bPre, bOnlyCheck, ErrorMessage);
+	return class'TestCentralWeaponReplacement'.static.StaticRegisterWeaponReplacement(Registrar, OldClassName, NewClassPath, ReplacementType, ReplacementOptions, bPre, bOnlyCheck, ErrorMessage);
 }
 
 static private final function bool Unregister(Object Registrar, optional bool bPre)
@@ -137,15 +139,16 @@ static protected function bool StaticIsConflicting(optional out string ErrorMess
 	local array<TemplateDynamicInfo> Replacements;
 	local int i;
 
-	bConflicting = bConflicting || !RegisterByArray(default.Class, default.WeaponsToReplace, false, true, true, ErrorMessage);
-	bConflicting = bConflicting || !RegisterByArray(default.Class, default.AmmoToReplace, true, true, true, ErrorMessage);
+	bConflicting = bConflicting || !RegisterByArray(default.Class, default.WeaponsToReplace, RT_Weapon, true, true, ErrorMessage);
+	bConflicting = bConflicting || !RegisterByArray(default.Class, default.AmmoToReplace, RT_Ammo, true, true, ErrorMessage);
+	bConflicting = bConflicting || !RegisterByArray(default.Class, default.ArmorToReplace, RT_Armor, true, true, ErrorMessage);
 
 	if (!bConflicting)
 	{
 		StaticGetDynamicReplacements(Replacements);
 		for (i=0; i<Replacements.Length; i++)
 		{
-			if (!RegisterByInfo(default.Class, Replacements[i].Template, Replacements[i].bAmmo, true, true, ErrorMessage))
+			if (!RegisterByInfo(default.Class, Replacements[i].Template, Replacements[i].Type, true, true, ErrorMessage))
 			{
 				bConflicting = true;
 				break;
@@ -161,13 +164,14 @@ static protected function StaticInitialize()
 	local array<TemplateDynamicInfo> Replacements;
 	local int i;
 
-	RegisterByArray(default.Class, default.WeaponsToReplace, false, true);
-	RegisterByArray(default.Class, default.AmmoToReplace, true, true);
+	RegisterByArray(default.Class, default.WeaponsToReplace, RT_Weapon, true);
+	RegisterByArray(default.Class, default.AmmoToReplace, RT_Ammo, true);
+	RegisterByArray(default.Class, default.ArmorToReplace, RT_Armor, true);
 
 	StaticGetDynamicReplacements(Replacements);
 	for (i=0; i<Replacements.Length; i++)
 	{
-		RegisterByInfo(default.Class, Replacements[i].Template, Replacements[i].bAmmo, true);
+		RegisterByInfo(default.Class, Replacements[i].Template, Replacements[i].Type, true);
 	}
 }
 
@@ -191,10 +195,10 @@ static function StaticGetDynamicReplacements(out array<TemplateDynamicInfo> Repl
 // Dynamic static interface functions
 //**********************************************************************************
 
-static protected final function TemplateDynamicInfo CreateTemplate(bool bAmmo, coerce name OldClassName, string NewClassPath, optional ReplacementOptionsInfo Options)
+static protected final function TemplateDynamicInfo CreateTemplate(EReplacementType Type, coerce name OldClassName, string NewClassPath, optional ReplacementOptionsInfo Options)
 {
 	local TemplateDynamicInfo item;
-	item.bAmmo = bAmmo;
+	item.Type = Type;
 	item.Template.OldClassName = OldClassName;
 	item.Template.NewClassPath = NewClassPath;
 	item.Template.Options = Options;
