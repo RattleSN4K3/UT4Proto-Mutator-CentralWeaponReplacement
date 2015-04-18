@@ -297,7 +297,6 @@ function bool CheckReplacement(Actor Other)
 	local class<UTArmorPickupFactory> NewArmorPickupClass;
 	local int i, Index;
 	local class<UTAmmoPickupFactory> NewAmmoClass;
-	local Actor DefaultActor;
 	local bool DefaultbStatic, DefaultbNoDelete;
 
 	WeaponPickup = UTWeaponPickupFactory(Other);
@@ -498,56 +497,38 @@ simulated function String GetHumanReadableName()
 function RegisterWeaponReplacement(Object Registrar, name OldClassName, string NewClassPath, EReplacementType ReplacementType, ReplacementOptionsInfo ReplacementOptions)
 {
 	local int index;
+	local array<ReplacementInfoEx> Replacements;
 
 	// ensure empty class path
 	if (NewClassPath ~= "None") NewClassPath = "";
 	else NewClassPath = TrimRight(NewClassPath);
 
-	if (ReplacementType == RT_Ammo)
+	if (!GetReplacements(ReplacementType, Replacements))
+		return;
+
+	if (IsNewItem(Replacements, index, OldClassName))
 	{
-		if (IsNewItem(AmmoToReplace, index, OldClassName))
-		{
-			AddReplacementToArray(AmmoToReplace, Registrar, OldClassName, NewClassPath, ReplacementOptions);
-		}
-		else if (!(AmmoToReplace[index].NewClassPath ~= NewClassPath))
-		{
-			AddErrorMessage(AmmoToReplace[index].Registrar, Registrar, OldClassName, NewClassPath);
-		}
+		AddReplacementToArray(Replacements, Registrar, OldClassName, NewClassPath, ReplacementOptions);
 	}
-	else if (ReplacementType == RT_Weapon)
+	else if (!(Replacements[index].NewClassPath ~= NewClassPath))
 	{
-		if (IsNewItem(WeaponsToReplace, index, OldClassName))
-		{
-			AddReplacementToArray(WeaponsToReplace, Registrar, OldClassName, NewClassPath, ReplacementOptions);
-		}
-		else if (!(WeaponsToReplace[index].NewClassPath ~= NewClassPath))
-		{
-			AddErrorMessage(WeaponsToReplace[index].Registrar, Registrar, OldClassName, NewClassPath);
-		}
+		AddErrorMessage(Replacements[index].Registrar, Registrar, OldClassName, NewClassPath);
 	}
-	else if (ReplacementType == RT_Armor)
-	{
-		if (IsNewItem(ArmorToReplace, index, OldClassName))
-		{
-			AddReplacementToArray(ArmorToReplace, Registrar, OldClassName, NewClassPath, ReplacementOptions);
-		}
-		else if (!(ArmorToReplace[index].NewClassPath ~= NewClassPath))
-		{
-			AddErrorMessage(ArmorToReplace[index].Registrar, Registrar, OldClassName, NewClassPath);
-		}
-	}
+
+	SetReplacements(ReplacementType, Replacements);
 }
 
-function RegisterWeaponReplacementArray(Object Registrar, array<TemplateInfo> Replacements, EReplacementType ReplacementType)
+function RegisterWeaponReplacementInfo(Object Registrar, coerce TemplateInfo RepInfo, EReplacementType ReplacementType)
+{
+	RegisterWeaponReplacement(Registrar, RepInfo.OldClassName, RepInfo.NewClassPath, ReplacementType, RepInfo.Options);
+}
+
+function RegisterWeaponReplacementArray(Object Registrar, coerce array<TemplateInfo> Replacements, EReplacementType ReplacementType)
 {
 	local int i;
 	for (i=0; i<Replacements.Length; i++)
 	{
-		RegisterWeaponReplacement(Registrar,
-			Replacements[i].OldClassName,
-			Replacements[i].NewClassPath,
-			ReplacementType,
-			Replacements[i].Options);
+		RegisterWeaponReplacementInfo(Registrar, Replacements[i], ReplacementType);
 	}
 }
 
@@ -845,6 +826,30 @@ static private function int StaticPreGetInsertIndex(out array<ReplacementInfoEx>
 //**********************************************************************************
 // Private functions
 //**********************************************************************************
+
+function bool GetReplacements(EReplacementType ReplacementType, out array<ReplacementInfoEx> Replacements)
+{
+	switch (ReplacementType) {
+	case RT_Weapon: Replacements = WeaponsToReplace;break;
+	case RT_Ammo: Replacements = AmmoToReplace;break;
+	case RT_Armor: Replacements = ArmorToReplace;break;
+	default: return false;
+	}
+
+	return true;
+}
+
+function bool SetReplacements(EReplacementType ReplacementType, out array<ReplacementInfoEx> Replacements)
+{
+	switch (ReplacementType) {
+	case RT_Weapon: WeaponsToReplace = Replacements;break;
+	case RT_Ammo: AmmoToReplace = Replacements;break;
+	case RT_Armor: ArmorToReplace = Replacements;break;
+	default: return false;
+	}
+
+	return true;
+}
 
 static private function AddReplacementToArray(out array<ReplacementInfoEx> arr, Object Registrar, name OldClassName, string NewClassPath, ReplacementOptionsInfo ReplacementOptions, optional int InsertIndex = INDEX_NONE)
 {
