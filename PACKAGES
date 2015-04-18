@@ -1,0 +1,19 @@
+Mutator TestCentralWeaponReplacement
+
+WeaponLightning TestCWR_LightningGun
+WeaponRail TestCWR_RailGun
+WeaponRemove TestCWR_NoWeapon
+WeaponConfig TestCWR_ConfigWeapon
+WeaponSubclass TestCWR_SubclassWeapon
+
+HealthRemove TestCWR_NoHealth
+HealthConfig TestCWR_ConfigHealth
+
+ArmorRemove TestCWR_NoArmor
+ArmorConfig TestCWR_ConfigArmor
+
+PowerupRemove TestCWR_NoPowerup
+PowerupConfig TestCWR_ConfigPowerup
+
+DeployableRemove TestCWR_NoDeployable
+DeployableConfig TestCWR_ConfigDeployable
