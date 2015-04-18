@@ -235,6 +235,7 @@ private function string GetPickupName(coerce string Path, bool IsPath)
 {
 	local int index;
 	local string str;
+	local class cls;
 	if (IsPath) index = HashedWeapons.Find('Hash', Locs(Path));
 	else index = HashedWeapons.Find('ClassName', name(Path));
 	if (index != INDEX_NONE && HashedWeapons[index].Info != none)
@@ -249,6 +250,12 @@ private function string GetPickupName(coerce string Path, bool IsPath)
 		{
 			str = HashedAmmos[index].Text;
 		}
+	}
+
+	if (IsPath)
+	{
+		cls = class(DynamicLoadObject(Path, class'class'));
+		GetFriendlyNameOfPickupClass(cls, str);
 	}
 
 	if (str == "" || Left(str, 1) == "?")
@@ -272,12 +279,7 @@ static private function string StaticGetObjectFriendlyName(Object obj, optional 
 	
 	if (str == "" && !NoFriendly)
 	{
-		if (Actor(obj) != none)
-			str = Actor(obj).GetHumanReadableName();
-		if (str == "" && class<Actor>(obj) != none)
-			str = class<Actor>(obj).static.GetLocalString();
-		else if (obj != none)
-			str = string(obj.Name);
+		GetFriendlyNameOfPickupClass(str);
 	}
 
 	if (str == "" && Obj != none)
@@ -303,6 +305,89 @@ private function string GetObjectFriendlyName(Object obj, optional bool NoFriend
 	}
 
 	return str != "" ? str : StaticGetObjectFriendlyName(obj, NoFriendly, defaultstr);
+}
+
+static function bool GetFriendlyNameOfPickupClass(class cls, out string out_propertytext, optional bool bUseDefaultInstead, optional coerce string DefaultStr)
+{
+	local class<Inventory> Inv;
+	local class<UTItemPickupFactory> Fac;
+	local class<UTWeaponLocker> Locker;
+	local string str;
+
+	Inv = class<Inventory>(cls);
+	if (Inv != none)
+	{
+		str = Inv.default.PickupMessage;
+		if (str == "" || str == class'Inventory'.default.PickupMessage)
+		{
+			str = Inv.default.ItemName;
+		}
+
+		if (class<UTDeployable>(cls) != none)
+		{
+			if (str == class'UTDeployable'.default.ItemName)
+			{
+				str = "";
+			}
+		}
+		if (class<UTBeamWeapon>(cls) != none)
+		{
+			if (str == class'UTBeamWeapon'.default.ItemName)
+			{
+				str = "";
+			}
+		}
+		else if (str != class'Inventory'.default.ItemName && str != class'Weapon'.default.ItemName && str != class'UTWeapon'.default.ItemName)
+		{
+			FixFriendlyName(str);
+			out_propertytext = str;
+			return true;
+		}
+		//@TODO: remove and fix returning value too early
+		else if (str == class'GameWeapon'.default.ItemName || str == class'UTWeapon'.default.ItemName)
+		{
+			FixFriendlyName(str);
+			out_propertytext = str;
+			return false;
+		}
+	}
+
+	Fac = class<UTItemPickupFactory>(cls);
+	if (Fac != none)
+	{
+		str = Fac.default.PickupMessage;
+	}
+
+	Locker = class<UTWeaponLocker>(cls);
+	if (Locker != none)
+	{
+		str = Locker.default.LockerString;
+	}
+
+	if (class<Actor>(cls) != none && str == "")
+	{
+		str = class<Actor>(cls).static.GetLocalString();
+		if (class<Inventory>(cls) != none && str == class'Inventory'.default.PickupMessage)
+		{
+			str = "";
+		}
+	}
+
+	if (str != "")
+	{
+		FixFriendlyName(str);
+		out_propertytext = str;
+		return true;
+	}
+
+	if (bUseDefaultInstead && DefaultStr != "")
+	{
+		out_propertytext = DefaultStr;
+		return true;
+	}
+
+	out_propertytext = string(cls.Name);
+	return true;
 }
 
 //**********************************************************************************
