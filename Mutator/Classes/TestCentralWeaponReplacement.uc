@@ -10,7 +10,10 @@ enum EReplacementType
 {
 	RT_Weapon,
 	RT_Ammo,
+	RT_Health,
 	RT_Armor,
+	RT_Powerup,
+	RT_Deployable,
 };
 
 //**********************************************************************************
@@ -132,7 +135,13 @@ var private transient config array<ReplacementInfoEx> StaticWeaponsToReplace;
 /** @ignore */
 var private transient config array<ReplacementInfoEx> StaticAmmoToReplace;
 /** @ignore */
+var private transient config array<ReplacementInfoEx> StaticHealthToReplace;
+/** @ignore */
 var private transient config array<ReplacementInfoEx> StaticArmorToReplace;
+/** @ignore */
+var private transient config array<ReplacementInfoEx> StaticPowerupsToReplace;
+/** @ignore */
+var private transient config array<ReplacementInfoEx> StaticDeployablesToReplace;
 /** @ignore */
 var private transient config array<name> StaticOrder;
 /** @ignore */
@@ -143,14 +152,23 @@ var private transient config bool StaticBatchOp;
 
 var config array<ReplacementInfoEx> DefaultWeaponsToReplace;
 var config array<ReplacementInfoEx> DefaultAmmoToReplace;
+
+var config array<ReplacementInfoEx> DefaultHealthToReplace;
 var config array<ReplacementInfoEx> DefaultArmorToReplace;
+var config array<ReplacementInfoEx> DefaultPowerupsToReplace;
+var config array<ReplacementInfoEx> DefaultDeployablesToReplace;
 
 // Workflow
 // ------------
 
 var array<ReplacementInfoEx> WeaponsToReplace;
 var array<ReplacementInfoEx> AmmoToReplace;
+
+var array<ReplacementInfoEx> HealthToReplace;
 var array<ReplacementInfoEx> ArmorToReplace;
+var array<ReplacementInfoEx> PowerupsToReplace;
+var array<ReplacementInfoEx> DeployablesToReplace;
+
 
 var TestCWRUI DataCache;
 var array<ErrorMessageInfo> ErrorMessages;
@@ -174,7 +192,11 @@ event PreBeginPlay()
 	{
 		WeaponsToReplace.Length = 0;
 		AmmoToReplace.Length = 0;
+
+		HealthToReplace.Length = 0;
 		ArmorToReplace.Length = 0;
+		PowerupsToReplace.Length = 0;
+		DeployablesToReplace.Length = 0;
 
 		for (i=0; i<DefaultWeaponsToReplace.Length; i++)
 			RegisterWeaponReplacement(none, DefaultWeaponsToReplace[i].OldClassName, DefaultWeaponsToReplace[i].NewClassPath, RT_Weapon, DefaultWeaponsToReplace[i].Options);
@@ -182,8 +204,17 @@ event PreBeginPlay()
 		for (i=0; i<DefaultAmmoToReplace.Length; i++)
 			RegisterWeaponReplacement(none, DefaultAmmoToReplace[i].OldClassName, DefaultAmmoToReplace[i].NewClassPath, RT_Ammo, DefaultAmmoToReplace[i].Options);
 
+		for (i=0; i<DefaultHealthToReplace.Length; i++)
+			RegisterWeaponReplacement(none, DefaultHealthToReplace[i].OldClassName, DefaultHealthToReplace[i].NewClassPath, RT_Health, DefaultHealthToReplace[i].Options);
+
 		for (i=0; i<DefaultArmorToReplace.Length; i++)
 			RegisterWeaponReplacement(none, DefaultArmorToReplace[i].OldClassName, DefaultArmorToReplace[i].NewClassPath, RT_Armor, DefaultArmorToReplace[i].Options);
+
+		for (i=0; i<DefaultPowerupsToReplace.Length; i++)
+			RegisterWeaponReplacement(none, DefaultPowerupsToReplace[i].OldClassName, DefaultPowerupsToReplace[i].NewClassPath, RT_Powerup, DefaultPowerupsToReplace[i].Options);
+
+		for (i=0; i<DefaultDeployablesToReplace.Length; i++)
+			RegisterWeaponReplacement(none, DefaultDeployablesToReplace[i].OldClassName, DefaultDeployablesToReplace[i].NewClassPath, RT_Deployable, DefaultDeployablesToReplace[i].Options);
 	}
 }
 
@@ -208,7 +239,11 @@ function InitMutator(string Options, out string ErrorMessage)
 		CurrentProfile = MapProvider;
 		RegisterWeaponReplacementArray(CurrentProfile, CurrentProfile.WeaponsToReplace, RT_Weapon);
 		RegisterWeaponReplacementArray(CurrentProfile, CurrentProfile.AmmoToReplace, RT_Ammo);
+
+		RegisterWeaponReplacementArray(CurrentProfile, CurrentProfile.HealthToReplace, RT_Health);
 		RegisterWeaponReplacementArray(CurrentProfile, CurrentProfile.ArmorToReplace, RT_Armor);
+		RegisterWeaponReplacementArray(CurrentProfile, CurrentProfile.PowerupsToReplace, RT_Powerup);
+		RegisterWeaponReplacementArray(CurrentProfile, CurrentProfile.DeployablesToReplace, RT_Deployable);
 	}
 
 	// Make sure the game does not hold a null reference
@@ -293,11 +328,16 @@ function bool CheckReplacement(Actor Other)
 	local UTWeaponPickupFactory WeaponPickup;
 	local UTWeaponLocker Locker;
 	local UTAmmoPickupFactory AmmoPickup, NewAmmo;
+	local class<UTAmmoPickupFactory> NewAmmoClass;
+	local UTHealthPickupFactory HealthPickup;
+	local class<UTHealthPickupFactory> NewHealthPickupClass;
 	local UTArmorPickupFactory ArmorPickup;
 	local class<UTArmorPickupFactory> NewArmorPickupClass;
+	local UTPowerupPickupFactory PowerupPickup;
+	local class<UTPowerupPickupFactory> NewPowerupPickupClass;
+	local UTDeployablePickupFactory DeployablePickup;
+	local class<UTDeployablePickupFactory> NewDeployablePickupClass;
 	local int i, Index;
-	local class<UTAmmoPickupFactory> NewAmmoClass;
-	local bool DefaultbStatic, DefaultbNoDelete;
 
 	WeaponPickup = UTWeaponPickupFactory(Other);
 	if (WeaponPickup != None)
@@ -321,7 +361,25 @@ function bool CheckReplacement(Actor Other)
 		Locker = UTWeaponLocker(Other);
 		for (i = 0; i < Locker.Weapons.length; i++)
 		{
-			if (Locker.Weapons[i].WeaponClass != none &&
+			if (class<UTDeployable>(Locker.Weapons[i].WeaponClass) != none)
+			{
+				if (Locker.Weapons[i].WeaponClass != none &&
+					ShouldBeReplaced(index, Locker.Weapons[i].WeaponClass, RT_Deployable) &&
+					DeployablesToReplace[index].Options.bNoReplaceWeapon == false &&
+					ShouldBeReplacedLocker(Locker, DeployablesToReplace[index].Options.LockerOptions))
+				{
+					if (DeployablesToReplace[index].NewClassPath == "")
+					{
+						// replace with nothing
+						Locker.ReplaceWeapon(i, None);
+					}
+					else
+					{
+						Locker.ReplaceWeapon(i, class<UTDeployable>(DynamicLoadObject(DeployablesToReplace[index].NewClassPath, class'Class')));
+					}
+				}
+			}
+			else if (Locker.Weapons[i].WeaponClass != none &&
 				ShouldBeReplaced(index, Locker.Weapons[i].WeaponClass, RT_Weapon) &&
 				WeaponsToReplace[index].Options.bNoReplaceWeapon == false &&
 				ShouldBeReplacedLocker(Locker, WeaponsToReplace[index].Options.LockerOptions))
@@ -374,6 +432,27 @@ function bool CheckReplacement(Actor Other)
 		}
 	}
 
+	else if (UTHealthPickupFactory(Other) != none)
+	{
+		HealthPickup = UTHealthPickupFactory(Other);
+		if (ShouldBeReplaced(index, HealthPickup.Class, RT_Health))
+		{
+			if (ClassPathValid(HealthToReplace[index].NewClassPath))
+			{
+				NewHealthPickupClass = class<UTHealthPickupFactory>(DynamicLoadObject(HealthToReplace[index].NewClassPath, class'Class'));
+				if (NewHealthPickupClass != none && Other.Class != NewHealthPickupClass)
+				{
+					SpawnStaticActor(NewHealthPickupClass, WorldInfo, Other.Owner,, Other.Location, Other.Rotation);
+					return false;
+				}
+			}
+			else
+			{
+				return false;
+			}
+		}
+	}
+	
 	else if (UTArmorPickupFactory(Other) != none)
 	{
 		ArmorPickup = UTArmorPickupFactory(Other);
@@ -384,17 +463,7 @@ function bool CheckReplacement(Actor Other)
 				NewArmorPickupClass = class<UTArmorPickupFactory>(DynamicLoadObject(ArmorToReplace[index].NewClassPath, class'Class'));
 				if (NewArmorPickupClass != none && Other.Class != NewArmorPickupClass)
 				{
-					DefaultbStatic = NewArmorPickupClass.default.bStatic;
-					DefaultbNoDelete = NewArmorPickupClass.default.bNoDelete;
-
-					class'TestCWRHelper'.static.SetActorStatic(NewArmorPickupClass, false);
-					class'TestCWRHelper'.static.SetActorNoDelete(NewArmorPickupClass, false);
-
-					Spawn(NewArmorPickupClass, Other.Owner,, Other.Location, Other.Rotation,, true);
-					
-					class'TestCWRHelper'.static.SetActorStatic(NewArmorPickupClass, DefaultbStatic);
-					class'TestCWRHelper'.static.SetActorNoDelete(NewArmorPickupClass, DefaultbNoDelete);
-
+					SpawnStaticActor(NewArmorPickupClass, WorldInfo, Other.Owner,, Other.Location, Other.Rotation);
 					return false;
 				}
 			}
@@ -403,6 +472,79 @@ function bool CheckReplacement(Actor Other)
 				return false;
 			}
 		}
+	}
+
+	else if (UTPowerupPickupFactory(Other) != none)
+	{
+		PowerupPickup = UTPowerupPickupFactory(Other);
+		if (ShouldBeReplaced(index, PowerupPickup.Class, RT_Powerup))
+		{
+			if (ClassPathValid(PowerupsToReplace[index].NewClassPath))
+			{
+				NewPowerupPickupClass = class<UTPowerupPickupFactory>(DynamicLoadObject(PowerupsToReplace[index].NewClassPath, class'Class'));
+				if (NewPowerupPickupClass != none && Other.Class != NewPowerupPickupClass)
+				{
+					SpawnStaticActor(NewPowerupPickupClass, WorldInfo, Other.Owner,, Other.Location, Other.Rotation);
+					return false;
+				}
+			}
+			else
+			{
+				return false;
+			}
+		}
+
+		//if (PowerupPickup.InventoryType != none && ShouldBeReplaced(index, PowerupPickup.InventoryType.Class, RT_Powerup))
+		//{
+		//	if (ClassPathValid(PowerupsToReplace[index].NewClassPath))
+		//	{
+		//		NewPowerupPickupClass = class<UTPowerupPickupFactory>(DynamicLoadObject(PowerupsToReplace[index].NewClassPath, class'Class'));
+		//		if (NewPowerupPickupClass != none && Other.Class != NewPowerupPickupClass)
+		//		{
+		//			SpawnStaticActor(NewPowerupPickupClass, WorldInfo, Other.Owner,, Other.Location, Other.Rotation);
+		//			return false;
+		//		}
+		//	}
+		//	else
+		//	{
+		//		return false;
+		//	}
+		//}
+	}
+
+	else if (UTDeployablePickupFactory(Other) != none)
+	{
+		DeployablePickup = UTDeployablePickupFactory(Other);
+		if (DeployablePickup.DeployablePickupClass != None)
+		{
+			if (ShouldBeReplaced(index, DeployablePickup.DeployablePickupClass, RT_Deployable) && !DeployablesToReplace[index].Options.bNoReplaceWeapon)
+			{
+				if (DeployablesToReplace[index].NewClassPath == "")
+				{
+					// replace with nothing
+					return false;
+				}
+				DeployablePickup.DeployablePickupClass = class<UTDeployable>(DynamicLoadObject(DeployablesToReplace[index].NewClassPath, class'Class'));
+				DeployablePickup.InitializePickup();
+			}
+		}
+
+		//if (ShouldBeReplaced(index, DeployablePickup.Class, RT_Deployable))
+		//{
+		//	if (ClassPathValid(DeployablesToReplace[index].NewClassPath))
+		//	{
+		//		NewDeployablePickupClass = class<UTDeployablePickupFactory>(DynamicLoadObject(DeployablesToReplace[index].NewClassPath, class'Class'));
+		//		if (NewDeployablePickupClass != none && Other.Class != NewDeployablePickupClass)
+		//		{
+		//			SpawnStaticActor(NewDeployablePickupClass, WorldInfo, Other.Owner,, Other.Location, Other.Rotation);
+		//			return false;
+		//		}
+		//	}
+		//	else
+		//	{
+		//		return false;
+		//	}
+		//}
 	}
 
 	// remove initial anim for Enforcers (may only work on server/listen player)
@@ -536,7 +678,11 @@ function UnRegisterWeaponReplacement(Object Registrar)
 {
 	RemoveReplacementFromArray(WeaponsToReplace, Registrar);
 	RemoveReplacementFromArray(AmmoToReplace, Registrar);
+
+	RemoveReplacementFromArray(HealthToReplace, Registrar);
 	RemoveReplacementFromArray(ArmorToReplace, Registrar);
+	RemoveReplacementFromArray(PowerupsToReplace, Registrar);
+	RemoveReplacementFromArray(DeployablesToReplace, Registrar);
 }
 
 static function bool StaticRegisterWeaponReplacement(Object Registrar, coerce name OldClassName, string NewClassPath, EReplacementType ReplacementType, optional ReplacementOptionsInfo ReplacementOptions, optional bool bPre, optional bool bOnlyCheck, optional out string ErrorMessage)
@@ -666,7 +812,11 @@ static function StaticPreInitialize()
 
 	default.StaticWeaponsToReplace.Length = 0;
 	default.StaticAmmoToReplace.Length = 0;
+
+	default.StaticHealthToReplace.Length = 0;
 	default.StaticArmorToReplace.Length = 0;
+	default.StaticPowerupsToReplace.Length = 0;
+	default.StaticDeployablesToReplace.Length = 0;
 
 	default.StaticOrder.Length = 0;
 	default.StaticBatchOp = false;
@@ -682,8 +832,17 @@ static function StaticPreInitialize()
 	for (i=0; i<default.DefaultAmmoToReplace.Length; i++)
 		StaticRegisterWeaponReplacement(none, default.DefaultAmmoToReplace[i].OldClassName, default.DefaultAmmoToReplace[i].NewClassPath, RT_Ammo, default.DefaultAmmoToReplace[i].Options, true);
 
+	for (i=0; i<default.StaticHealthToReplace.Length; i++)
+		StaticRegisterWeaponReplacement(none, default.StaticHealthToReplace[i].OldClassName, default.StaticHealthToReplace[i].NewClassPath, RT_Health, default.StaticHealthToReplace[i].Options, true);
+
 	for (i=0; i<default.StaticArmorToReplace.Length; i++)
 		StaticRegisterWeaponReplacement(none, default.StaticArmorToReplace[i].OldClassName, default.StaticArmorToReplace[i].NewClassPath, RT_Armor, default.StaticArmorToReplace[i].Options, true);
+
+	for (i=0; i<default.StaticPowerupsToReplace.Length; i++)
+		StaticRegisterWeaponReplacement(none, default.StaticPowerupsToReplace[i].OldClassName, default.StaticPowerupsToReplace[i].NewClassPath, RT_Powerup, default.StaticPowerupsToReplace[i].Options, true);
+
+	for (i=0; i<default.StaticDeployablesToReplace.Length; i++)
+		StaticRegisterWeaponReplacement(none, default.StaticDeployablesToReplace[i].OldClassName, default.StaticDeployablesToReplace[i].NewClassPath, RT_Deployable, default.StaticDeployablesToReplace[i].Options, true);
 }
 
 static function StaticPreDestroy()
@@ -692,7 +851,11 @@ static function StaticPreDestroy()
 
 	default.StaticWeaponsToReplace.Length = 0;
 	default.StaticAmmoToReplace.Length = 0;
+
+	default.StaticHealthToReplace.Length = 0;
 	default.StaticArmorToReplace.Length = 0;
+	default.StaticPowerupsToReplace.Length = 0;
+	default.StaticDeployablesToReplace.Length = 0;
 
 	default.StaticOrder.Length = 0;
 	default.StaticBatchOp = false;
@@ -753,6 +916,23 @@ static private function bool StaticPreRegisterWeaponReplacement(Object Registrar
 			return false;
 		}
 	}
+	else if (ReplacementType == RT_Health)
+	{
+		if (IsNewItem(default.StaticHealthToReplace, index, OldClassName))
+		{
+			if (!bOnlyCheck)
+			{
+				if (default.StaticBatchOp) index = StaticPreGetInsertIndex(default.StaticHealthToReplace, Registrar);
+				AddReplacementToArray(default.StaticHealthToReplace, Registrar, OldClassName, NewClassPath, ReplacementOptions, index);
+			}
+			return true;
+		}
+		else if (!(default.StaticHealthToReplace[index].NewClassPath ~= NewClassPath))
+		{
+			ErrorMessage = class'TestCWRUI'.static.GetData().GetErrorMessage(default.StaticHealthToReplace[index].Registrar, Registrar, OldClassName, NewClassPath);
+			return false;
+		}
+	}
 	else if (ReplacementType == RT_Armor)
 	{
 		if (IsNewItem(default.StaticArmorToReplace, index, OldClassName))
@@ -767,6 +947,40 @@ static private function bool StaticPreRegisterWeaponReplacement(Object Registrar
 		else if (!(default.StaticArmorToReplace[index].NewClassPath ~= NewClassPath))
 		{
 			ErrorMessage = class'TestCWRUI'.static.GetData().GetErrorMessage(default.StaticArmorToReplace[index].Registrar, Registrar, OldClassName, NewClassPath);
+			return false;
+		}
+	}
+	else if (ReplacementType == RT_Powerup)
+	{
+		if (IsNewItem(default.StaticPowerupsToReplace, index, OldClassName))
+		{
+			if (!bOnlyCheck)
+			{
+				if (default.StaticBatchOp) index = StaticPreGetInsertIndex(default.StaticPowerupsToReplace, Registrar);
+				AddReplacementToArray(default.StaticPowerupsToReplace, Registrar, OldClassName, NewClassPath, ReplacementOptions, index);
+			}
+			return true;
+		}
+		else if (!(default.StaticPowerupsToReplace[index].NewClassPath ~= NewClassPath))
+		{
+			ErrorMessage = class'TestCWRUI'.static.GetData().GetErrorMessage(default.StaticPowerupsToReplace[index].Registrar, Registrar, OldClassName, NewClassPath);
+			return false;
+		}
+	}
+	else if (ReplacementType == RT_Deployable)
+	{
+		if (IsNewItem(default.StaticDeployablesToReplace, index, OldClassName))
+		{
+			if (!bOnlyCheck)
+			{
+				if (default.StaticBatchOp) index = StaticPreGetInsertIndex(default.StaticDeployablesToReplace, Registrar);
+				AddReplacementToArray(default.StaticDeployablesToReplace, Registrar, OldClassName, NewClassPath, ReplacementOptions, index);
+			}
+			return true;
+		}
+		else if (!(default.StaticDeployablesToReplace[index].NewClassPath ~= NewClassPath))
+		{
+			ErrorMessage = class'TestCWRUI'.static.GetData().GetErrorMessage(default.StaticDeployablesToReplace[index].Registrar, Registrar, OldClassName, NewClassPath);
 			return false;
 		}
 	}
@@ -786,7 +1000,11 @@ static private function bool StaticPreUnRegisterWeaponReplacement(Object Registr
 
 	bAnyRemoved = RemoveReplacementFromArray(default.StaticWeaponsToReplace, Registrar) || bAnyRemoved;
 	bAnyRemoved = RemoveReplacementFromArray(default.StaticAmmoToReplace, Registrar) || bAnyRemoved;
+
+	bAnyRemoved = RemoveReplacementFromArray(default.StaticHealthToReplace, Registrar) || bAnyRemoved;
 	bAnyRemoved = RemoveReplacementFromArray(default.StaticArmorToReplace, Registrar) || bAnyRemoved;
+	bAnyRemoved = RemoveReplacementFromArray(default.StaticPowerupsToReplace, Registrar) || bAnyRemoved;
+	bAnyRemoved = RemoveReplacementFromArray(default.StaticDeployablesToReplace, Registrar) || bAnyRemoved;
 
 	// remove order entry (skip otherwise to keep order for updating)
 	if (!default.StaticBatchOp) default.StaticOrder.RemoveItem(Registrar.Name);
@@ -832,7 +1050,11 @@ function bool GetReplacements(EReplacementType ReplacementType, out array<Replac
 	switch (ReplacementType) {
 	case RT_Weapon: Replacements = WeaponsToReplace;break;
 	case RT_Ammo: Replacements = AmmoToReplace;break;
+
+	case RT_Health: Replacements = HealthToReplace;break;
 	case RT_Armor: Replacements = ArmorToReplace;break;
+	case RT_Powerup: Replacements = PowerupsToReplace;break;
+	case RT_Deployable: Replacements = DeployablesToReplace;break;
 	default: return false;
 	}
 
@@ -844,7 +1066,11 @@ function bool SetReplacements(EReplacementType ReplacementType, out array<Replac
 	switch (ReplacementType) {
 	case RT_Weapon: WeaponsToReplace = Replacements;break;
 	case RT_Ammo: AmmoToReplace = Replacements;break;
+
+	case RT_Health: HealthToReplace = Replacements;break;
 	case RT_Armor: ArmorToReplace = Replacements;break;
+	case RT_Powerup: PowerupsToReplace = Replacements;break;
+	case RT_Deployable: DeployablesToReplace = Replacements;break;
 	default: return false;
 	}
 
@@ -956,6 +1182,23 @@ function bool ShouldBeReplaced(out int index, class ClassToCheck, EReplacementTy
 			}
 		}
 	}
+	else if (ReplacementType == RT_Health)
+	{
+		index = HealthToReplace.Find('OldClassName', ClassToCheck.Name);
+		if (index == INDEX_NONE)
+		{
+			for (i=0; i<HealthToReplace.Length; i++)
+			{
+				if (HealthToReplace[i].Options.bSubClasses && 
+					IsSubClass(ClassToCheck, HealthToReplace[i].OldClassName) &&
+					!IgnoreSubClass(ClassToCheck, HealthToReplace[i].Options.IgnoreSubClasses))
+				{
+					index = i;
+					return true;
+				}
+			}
+		}
+	}
 	else if (ReplacementType == RT_Armor)
 	{
 		index = ArmorToReplace.Find('OldClassName', ClassToCheck.Name);
@@ -966,6 +1209,41 @@ function bool ShouldBeReplaced(out int index, class ClassToCheck, EReplacementTy
 				if (ArmorToReplace[i].Options.bSubClasses && 
 					IsSubClass(ClassToCheck, ArmorToReplace[i].OldClassName) &&
 					!IgnoreSubClass(ClassToCheck, ArmorToReplace[i].Options.IgnoreSubClasses))
+				{
+					index = i;
+					return true;
+				}
+			}
+		}
+	}
+	
+	else if (ReplacementType == RT_Powerup)
+	{
+		index = PowerupsToReplace.Find('OldClassName', ClassToCheck.Name);
+		if (index == INDEX_NONE)
+		{
+			for (i=0; i<PowerupsToReplace.Length; i++)
+			{
+				if (PowerupsToReplace[i].Options.bSubClasses && 
+					IsSubClass(ClassToCheck, PowerupsToReplace[i].OldClassName) &&
+					!IgnoreSubClass(ClassToCheck, PowerupsToReplace[i].Options.IgnoreSubClasses))
+				{
+					index = i;
+					return true;
+				}
+			}
+		}
+	}
+	else if (ReplacementType == RT_Deployable)
+	{
+		index = DeployablesToReplace.Find('OldClassName', ClassToCheck.Name);
+		if (index == INDEX_NONE)
+		{
+			for (i=0; i<DeployablesToReplace.Length; i++)
+			{
+				if (DeployablesToReplace[i].Options.bSubClasses && 
+					IsSubClass(ClassToCheck, DeployablesToReplace[i].OldClassName) &&
+					!IgnoreSubClass(ClassToCheck, DeployablesToReplace[i].Options.IgnoreSubClasses))
 				{
 					index = i;
 					return true;
@@ -1077,7 +1355,7 @@ static simulated function string TrimRight(coerce string sInput, optional coerce
 	return sOutput;
 }
 
-static function bool GetStaticMutator(out TestCentralWeaponReplacement OutMutator)
+private static function bool GetStaticMutator(out TestCentralWeaponReplacement OutMutator)
 {
 	local Object Obj;
 	if (GetDefaultObject(default.Class, Obj) && TestCentralWeaponReplacement(Obj) != none)
@@ -1086,6 +1364,35 @@ static function bool GetStaticMutator(out TestCentralWeaponReplacement OutMutato
 	}
 
 	return OutMutator != none;
+}
+
+static function bool SpawnStaticActor(
+	class<Actor> ActorClass, 
+	optional WorldInfo  WorldInfo,
+	optional actor	    SpawnOwner,
+	optional name       SpawnTag,
+	optional vector     SpawnLocation,
+	optional rotator    SpawnRotation,
+	optional Actor      ActorTemplate)
+{
+	local Actor NewActor;
+	local bool DefaultbStatic, DefaultbNoDelete;
+
+	if (WorldInfo == none)
+		WorldInfo = class'Engine'.static.GetCurrentWorldInfo();
+
+	DefaultbStatic = ActorClass.default.bStatic;
+	DefaultbNoDelete = ActorClass.default.bNoDelete;
+
+	class'TestCWRHelper'.static.SetActorStatic(ActorClass, false);
+	class'TestCWRHelper'.static.SetActorNoDelete(ActorClass, false);
+
+	NewActor = WorldInfo.Spawn(ActorClass, SpawnOwner, SpawnTag, SpawnLocation, SpawnRotation, ActorTemplate, true);
+					
+	class'TestCWRHelper'.static.SetActorStatic(ActorClass, DefaultbStatic);
+	class'TestCWRHelper'.static.SetActorNoDelete(ActorClass, DefaultbNoDelete);
+
+	return NewActor != none;
 }
 
 Defaultproperties

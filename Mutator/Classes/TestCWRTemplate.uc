@@ -5,7 +5,11 @@ class TestCWRTemplate extends UTMutator
 
 var array<TemplateInfo> WeaponsToReplace;
 var array<TemplateInfo> AmmoToReplace;
+
+var array<TemplateInfo> HealthToReplace;
 var array<TemplateInfo> ArmorToReplace;
+var array<TemplateInfo> PowerupsToReplace;
+var array<TemplateInfo> DeployablesToReplace;
  
 var const bool bAutoDestroy;
 
@@ -22,7 +26,10 @@ event PreBeginPlay()
 		Registrar = GetRegistrar();
 		RegisterByArray(Registrar, WeaponsToReplace, RT_Weapon);
 		RegisterByArray(Registrar, AmmoToReplace, RT_Ammo);
+		RegisterByArray(Registrar, HealthToReplace, RT_Health);
 		RegisterByArray(Registrar, ArmorToReplace, RT_Armor);
+		RegisterByArray(Registrar, PowerupsToReplace, RT_Powerup);
+		RegisterByArray(Registrar, DeployablesToReplace, RT_Deployable);
 
 		StaticGetDynamicReplacements(Replacements);
 		for (i=0; i<Replacements.Length; i++)
@@ -51,13 +58,13 @@ protected final function Object GetRegistrar()
 	return bAutoDestroy ? class : self;
 }
 
-static private final function bool RegisterByArray(Object Registrar, array<TemplateInfo> ItemsToReplace, EReplacementType ReplacementType, optional bool bPre, optional bool bOnlyCheck, optional out string ErrorMessage)
+static private final function bool RegisterByArray(Object Registrar, array<TemplateInfo> Replacements, EReplacementType ReplacementType, optional bool bPre, optional bool bOnlyCheck, optional out string ErrorMessage)
 {
 	local int i;
 
-	for (i=0; i<ItemsToReplace.Length; i++)
+	for (i=0; i<Replacements.Length; i++)
 	{
-		if (!RegisterByInfo(Registrar, ItemsToReplace[i], ReplacementType, bPre, bOnlyCheck, ErrorMessage))
+		if (!RegisterByInfo(Registrar, Replacements[i], ReplacementType, bPre, bOnlyCheck, ErrorMessage))
 		{
 			return false;
 		}
@@ -141,7 +148,11 @@ static protected function bool StaticIsConflicting(optional out string ErrorMess
 
 	bConflicting = bConflicting || !RegisterByArray(default.Class, default.WeaponsToReplace, RT_Weapon, true, true, ErrorMessage);
 	bConflicting = bConflicting || !RegisterByArray(default.Class, default.AmmoToReplace, RT_Ammo, true, true, ErrorMessage);
+
+	bConflicting = bConflicting || !RegisterByArray(default.Class, default.HealthToReplace, RT_Health, true, true, ErrorMessage);
 	bConflicting = bConflicting || !RegisterByArray(default.Class, default.ArmorToReplace, RT_Armor, true, true, ErrorMessage);
+	bConflicting = bConflicting || !RegisterByArray(default.Class, default.PowerupsToReplace, RT_Powerup, true, true, ErrorMessage);
+	bConflicting = bConflicting || !RegisterByArray(default.Class, default.DeployablesToReplace, RT_Deployable, true, true, ErrorMessage);
 
 	if (!bConflicting)
 	{
@@ -166,7 +177,11 @@ static protected function StaticInitialize()
 
 	RegisterByArray(default.Class, default.WeaponsToReplace, RT_Weapon, true);
 	RegisterByArray(default.Class, default.AmmoToReplace, RT_Ammo, true);
+
+	RegisterByArray(default.Class, default.HealthToReplace, RT_Health, true);
 	RegisterByArray(default.Class, default.ArmorToReplace, RT_Armor, true);
+	RegisterByArray(default.Class, default.PowerupsToReplace, RT_Powerup, true);
+	RegisterByArray(default.Class, default.DeployablesToReplace, RT_Deployable, true);
 
 	StaticGetDynamicReplacements(Replacements);
 	for (i=0; i<Replacements.Length; i++)
