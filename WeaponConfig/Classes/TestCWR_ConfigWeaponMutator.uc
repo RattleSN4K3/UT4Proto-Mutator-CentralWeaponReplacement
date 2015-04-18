@@ -16,10 +16,8 @@ function PostBeginPlay()
 	local int i;
 	local UTGame G;
 
-	// ensure another mutator can replace the weapon
 	Super.PostBeginPlay();
 
-	// Make sure the game does not hold a null reference
 	G = UTGame(WorldInfo.Game);
 	if(G != none)
 	{
@@ -41,7 +39,7 @@ function PostBeginPlay()
 		}
 	}
 
-	if (bAddToLocker)
+	if (bAddToLocker && WeaponClass != none)
 	{
 		AddToLocker();
 	}
@@ -57,10 +55,11 @@ function AddToLocker()
 		ent.WeaponClass = class<UTWeapon>(WeaponClass);
 		if (class<UTWeapon>(WeaponClass) != none)
 		{
-			Locker.MaxDesireability += class<UTWeapon>(WeaponClass).Default.AIRating;
+			if (Locker.Weapons.Find('WeaponClass', class<UTWeapon>(WeaponClass)) != INDEX_NONE)
+				continue;
 
-			//if (class<UTWeapon>(WeaponClass).default.PickupFactoryMesh != none)
-			//	ent.PickupMesh = class<UTWeapon>(WeaponClass).default.PickupFactoryMesh;
+			ent.WeaponClass = class<UTWeapon>(WeaponClass);
+			Locker.MaxDesireability += class<UTWeapon>(WeaponClass).Default.AIRating;
 		}
 
 		Locker.Weapons.AddItem(ent);
