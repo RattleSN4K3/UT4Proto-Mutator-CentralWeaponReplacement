@@ -645,7 +645,7 @@ function RegisterWeaponReplacement(Object Registrar, name OldClassName, string N
 	if (NewClassPath ~= "None") NewClassPath = "";
 	else NewClassPath = TrimRight(NewClassPath);
 
-	if (!GetReplacements(ReplacementType, Replacements))
+	if (!GetReplacements(self, ReplacementType, Replacements))
 		return;
 
 	if (IsNewItem(Replacements, index, OldClassName))
@@ -657,7 +657,7 @@ function RegisterWeaponReplacement(Object Registrar, name OldClassName, string N
 		AddErrorMessage(Replacements[index].Registrar, Registrar, OldClassName, NewClassPath);
 	}
 
-	SetReplacements(ReplacementType, Replacements);
+	SetReplacements(self, ReplacementType, Replacements);
 }
 
 function RegisterWeaponReplacementInfo(Object Registrar, coerce TemplateInfo RepInfo, EReplacementType ReplacementType)
@@ -869,123 +869,41 @@ static function StaticPreDestroy()
 
 static private function bool StaticPreRegisterWeaponReplacement(Object Registrar, name OldClassName, string NewClassPath, EReplacementType ReplacementType, ReplacementOptionsInfo ReplacementOptions, optional bool bOnlyCheck, optional out string ErrorMessage)
 {
+	local bool bSuccess;
 	local int index;
 	local name RegistrarName;
+	local array<ReplacementInfoEx> Replacements;
 
 	// ensure empty class path
 	if (NewClassPath ~= "None") NewClassPath = "";
 	else NewClassPath = TrimRight(NewClassPath);
 
-	RegistrarName = Registrar != none ? Registrar.Name : '';
-	if (!bOnlyCheck && default.StaticOrder.Find(RegistrarName) == INDEX_NONE)
+	if (GetReplacements(default.Class, ReplacementType, Replacements))
 	{
-		default.StaticOrder.AddItem(RegistrarName);
+		RegistrarName = Registrar != none ? Registrar.Name : '';
+		if (!bOnlyCheck && default.StaticOrder.Find(RegistrarName) == INDEX_NONE)
+		{
+			default.StaticOrder.AddItem(RegistrarName);
+		}
+
+		if (IsNewItem(Replacements, index, OldClassName))
+		{
+			if (!bOnlyCheck)
+			{
+				if (default.StaticBatchOp) index = StaticPreGetInsertIndex(Replacements, Registrar);
+				AddReplacementToArray(Replacements, Registrar, OldClassName, NewClassPath, ReplacementOptions, index);
+			}
+			bSuccess = true;
+		}
+		else if (!(Replacements[index].NewClassPath ~= NewClassPath))
+		{
+			ErrorMessage = class'TestCWRUI'.static.GetData().GetErrorMessage(Replacements[index].Registrar, Registrar, OldClassName, NewClassPath);
+		}
+
+		SetReplacements(default.Class, ReplacementType, Replacements);
 	}
 
-	if (ReplacementType == RT_Ammo)
-	{
-		if (IsNewItem(default.StaticAmmoToReplace, index, OldClassName))
-		{
-			if (!bOnlyCheck)
-			{
-				if (default.StaticBatchOp) index = StaticPreGetInsertIndex(default.StaticAmmoToReplace, Registrar);
-				AddReplacementToArray(default.StaticAmmoToReplace, Registrar, OldClassName, NewClassPath, ReplacementOptions, index);
-			}
-			return true;
-		}
-		else if (!(default.StaticAmmoToReplace[index].NewClassPath ~= NewClassPath))
-		{
-			ErrorMessage = class'TestCWRUI'.static.GetData().GetErrorMessage(default.StaticAmmoToReplace[index].Registrar, Registrar, OldClassName, NewClassPath);
-			return false;
-		}
-	}
-	else if (ReplacementType == RT_Weapon)
-	{
-		if (IsNewItem(default.StaticWeaponsToReplace, index, OldClassName))
-		{
-			if (!bOnlyCheck)
-			{
-				if (default.StaticBatchOp) index = StaticPreGetInsertIndex(default.StaticWeaponsToReplace, Registrar);
-				AddReplacementToArray(default.StaticWeaponsToReplace, Registrar, OldClassName, NewClassPath, ReplacementOptions, index);
-			}
-			return true;
-		}
-		else if (!(default.StaticWeaponsToReplace[index].NewClassPath ~= NewClassPath))
-		{
-			ErrorMessage = class'TestCWRUI'.static.GetData().GetErrorMessage(default.StaticWeaponsToReplace[index].Registrar, Registrar, OldClassName, NewClassPath);
-			return false;
-		}
-	}
-	else if (ReplacementType == RT_Health)
-	{
-		if (IsNewItem(default.StaticHealthToReplace, index, OldClassName))
-		{
-			if (!bOnlyCheck)
-			{
-				if (default.StaticBatchOp) index = StaticPreGetInsertIndex(default.StaticHealthToReplace, Registrar);
-				AddReplacementToArray(default.StaticHealthToReplace, Registrar, OldClassName, NewClassPath, ReplacementOptions, index);
-			}
-			return true;
-		}
-		else if (!(default.StaticHealthToReplace[index].NewClassPath ~= NewClassPath))
-		{
-			ErrorMessage = class'TestCWRUI'.static.GetData().GetErrorMessage(default.StaticHealthToReplace[index].Registrar, Registrar, OldClassName, NewClassPath);
-			return false;
-		}
-	}
-	else if (ReplacementType == RT_Armor)
-	{
-		if (IsNewItem(default.StaticArmorToReplace, index, OldClassName))
-		{
-			if (!bOnlyCheck)
-			{
-				if (default.StaticBatchOp) index = StaticPreGetInsertIndex(default.StaticArmorToReplace, Registrar);
-				AddReplacementToArray(default.StaticArmorToReplace, Registrar, OldClassName, NewClassPath, ReplacementOptions, index);
-			}
-			return true;
-		}
-		else if (!(default.StaticArmorToReplace[index].NewClassPath ~= NewClassPath))
-		{
-			ErrorMessage = class'TestCWRUI'.static.GetData().GetErrorMessage(default.StaticArmorToReplace[index].Registrar, Registrar, OldClassName, NewClassPath);
-			return false;
-		}
-	}
-	else if (ReplacementType == RT_Powerup)
-	{
-		if (IsNewItem(default.StaticPowerupsToReplace, index, OldClassName))
-		{
-			if (!bOnlyCheck)
-			{
-				if (default.StaticBatchOp) index = StaticPreGetInsertIndex(default.StaticPowerupsToReplace, Registrar);
-				AddReplacementToArray(default.StaticPowerupsToReplace, Registrar, OldClassName, NewClassPath, ReplacementOptions, index);
-			}
-			return true;
-		}
-		else if (!(default.StaticPowerupsToReplace[index].NewClassPath ~= NewClassPath))
-		{
-			ErrorMessage = class'TestCWRUI'.static.GetData().GetErrorMessage(default.StaticPowerupsToReplace[index].Registrar, Registrar, OldClassName, NewClassPath);
-			return false;
-		}
-	}
-	else if (ReplacementType == RT_Deployable)
-	{
-		if (IsNewItem(default.StaticDeployablesToReplace, index, OldClassName))
-		{
-			if (!bOnlyCheck)
-			{
-				if (default.StaticBatchOp) index = StaticPreGetInsertIndex(default.StaticDeployablesToReplace, Registrar);
-				AddReplacementToArray(default.StaticDeployablesToReplace, Registrar, OldClassName, NewClassPath, ReplacementOptions, index);
-			}
-			return true;
-		}
-		else if (!(default.StaticDeployablesToReplace[index].NewClassPath ~= NewClassPath))
-		{
-			ErrorMessage = class'TestCWRUI'.static.GetData().GetErrorMessage(default.StaticDeployablesToReplace[index].Registrar, Registrar, OldClassName, NewClassPath);
-			return false;
-		}
-	}
-
-	return true;
+	return bSuccess;
 }
 
 static private function bool StaticPreUnRegisterWeaponReplacement(Object Registrar, optional out string ErrorMessage)
@@ -1045,33 +963,54 @@ static private function int StaticPreGetInsertIndex(out array<ReplacementInfoEx>
 // Private functions
 //**********************************************************************************
 
-function bool GetReplacements(EReplacementType ReplacementType, out array<ReplacementInfoEx> Replacements)
+static function bool GetReplacements(Object Context, EReplacementType ReplacementType, out array<ReplacementInfoEx> Replacements)
 {
-	switch (ReplacementType) {
-	case RT_Weapon: Replacements = WeaponsToReplace;break;
-	case RT_Ammo: Replacements = AmmoToReplace;break;
+	local TestCentralWeaponReplacement ContextObj;
+	local bool IsStatic;
+	ContextObj = TestCentralWeaponReplacement(Context);
+	IsStatic = ContextObj == none;
 
-	case RT_Health: Replacements = HealthToReplace;break;
-	case RT_Armor: Replacements = ArmorToReplace;break;
-	case RT_Powerup: Replacements = PowerupsToReplace;break;
-	case RT_Deployable: Replacements = DeployablesToReplace;break;
+	switch (ReplacementType) {
+	case RT_Weapon: Replacements = IsStatic ? default.StaticWeaponsToReplace : ContextObj.WeaponsToReplace;break;
+	case RT_Ammo: Replacements = IsStatic ? default.StaticAmmoToReplace : ContextObj.AmmoToReplace;break;
+
+	case RT_Health: Replacements = IsStatic ? default.StaticHealthToReplace : ContextObj.HealthToReplace;break;
+	case RT_Armor: Replacements = IsStatic ? default.StaticArmorToReplace : ContextObj.ArmorToReplace;break;
+	case RT_Powerup: Replacements = IsStatic ? default.StaticPowerupsToReplace : ContextObj.PowerupsToReplace;break;
+	case RT_Deployable: Replacements = IsStatic ? default.StaticDeployablesToReplace : ContextObj.DeployablesToReplace;break;
 	default: return false;
 	}
 
 	return true;
 }
 
-function bool SetReplacements(EReplacementType ReplacementType, out array<ReplacementInfoEx> Replacements)
+static function bool SetReplacements(Object Context, EReplacementType ReplacementType, out array<ReplacementInfoEx> Replacements)
 {
-	switch (ReplacementType) {
-	case RT_Weapon: WeaponsToReplace = Replacements;break;
-	case RT_Ammo: AmmoToReplace = Replacements;break;
+	local TestCentralWeaponReplacement ContextObj;
+	ContextObj = TestCentralWeaponReplacement(Context);
 
-	case RT_Health: HealthToReplace = Replacements;break;
-	case RT_Armor: ArmorToReplace = Replacements;break;
-	case RT_Powerup: PowerupsToReplace = Replacements;break;
-	case RT_Deployable: DeployablesToReplace = Replacements;break;
-	default: return false;
+	if (ContextObj == none)
+	{
+		if (ReplacementType == RT_Weapon) default.StaticWeaponsToReplace = Replacements;
+		else if (ReplacementType == RT_Ammo) default.StaticAmmoToReplace = Replacements;
+		else if (ReplacementType == RT_Health) default.StaticHealthToReplace = Replacements;
+		else if (ReplacementType == RT_Armor) default.StaticArmorToReplace = Replacements;
+		else if (ReplacementType == RT_Powerup) default.StaticPowerupsToReplace = Replacements;
+		else if (ReplacementType == RT_Deployable) default.StaticDeployablesToReplace = Replacements;
+		else return false;
+	}
+	else
+	{
+		switch (ReplacementType) {
+		case RT_Weapon: ContextObj.WeaponsToReplace = Replacements;break;
+		case RT_Ammo: ContextObj.AmmoToReplace = Replacements;break;
+
+		case RT_Health: ContextObj.HealthToReplace = Replacements;break;
+		case RT_Armor: ContextObj.ArmorToReplace = Replacements;break;
+		case RT_Powerup: ContextObj.PowerupsToReplace = Replacements;break;
+		case RT_Deployable: ContextObj.DeployablesToReplace = Replacements;break;
+		default: return false;
+		}
 	}
 
 	return true;
