@@ -277,9 +277,9 @@ static private function string StaticGetObjectFriendlyName(Object obj, optional 
 			str = Repl(default.ProfileTitle, "`t", TestCWRMapProfile(Obj).ProfileName);
 	}
 	
-	if (str == "" && !NoFriendly)
+	if (str == "" && !NoFriendly && obj != none)
 	{
-		GetFriendlyNameOfPickupClass(str);
+		GetFriendlyNameOfPickupClass(obj.Class, str);
 	}
 
 	if (str == "" && Obj != none)
