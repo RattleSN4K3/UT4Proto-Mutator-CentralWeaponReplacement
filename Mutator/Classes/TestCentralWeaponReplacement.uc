@@ -359,14 +359,14 @@ function bool CheckReplacement(Actor Other)
 	local class NewClass;
 	local byte bAbort;
 
-	WeaponPickup = UTWeaponPickupFactory(Other);
-	if (WeaponPickup != None)
+	if (UTWeaponPickupFactory(Other) != None)
 	{
+		WeaponPickup = UTWeaponPickupFactory(Other);
 		if (WeaponPickup.WeaponPickupClass != None)
 		{
 			if (ShouldBeReplaced(index, WeaponPickup.WeaponPickupClass, RT_Weapon) && !WeaponsToReplace[index].Options.bNoReplaceWeapon)
 			{
-				if (WeaponsToReplace[index].NewClassPath == "" || !LoadClass(WeaponsToReplace[index].NewClassPath, NewClass))
+				if (!ClassPathValid(WeaponsToReplace[index].NewClassPath) || !LoadClass(WeaponsToReplace[index].NewClassPath, NewClass))
 				{
 					// replace with nothing
 					return false;
@@ -396,7 +396,7 @@ function bool CheckReplacement(Actor Other)
 					DeployablesToReplace[index].Options.bNoReplaceWeapon == false &&
 					ShouldBeReplacedLocker(Locker, DeployablesToReplace[index].Options.LockerOptions))
 				{
-					if (DeployablesToReplace[index].NewClassPath == "")
+					if (!ClassPathValid(DeployablesToReplace[index].NewClassPath))
 					{
 						// replace with nothing
 						Locker.ReplaceWeapon(i, None);
@@ -412,7 +412,7 @@ function bool CheckReplacement(Actor Other)
 				WeaponsToReplace[index].Options.bNoReplaceWeapon == false &&
 				ShouldBeReplacedLocker(Locker, WeaponsToReplace[index].Options.LockerOptions))
 			{
-				if (WeaponsToReplace[index].NewClassPath == "")
+				if (!ClassPathValid(WeaponsToReplace[index].NewClassPath))
 				{
 					// replace with nothing
 					Locker.ReplaceWeapon(i, None);
@@ -431,7 +431,7 @@ function bool CheckReplacement(Actor Other)
 		{
 			if (ShouldBeReplaced(index, AmmoPickup.Class, RT_Ammo) && !AmmoToReplace[index].Options.bNoReplaceWeapon)
 			{
-				if (AmmoToReplace[index].NewClassPath == "")
+				if (!ClassPathValid(AmmoToReplace[index].NewClassPath))
 				{
 					// replace with nothing
 					return false;
@@ -498,65 +498,58 @@ function bool CheckReplacement(Actor Other)
 			}
 		}
 
-		//if (PowerupPickup.InventoryType != none && ShouldBeReplaced(index, PowerupPickup.InventoryType.Class, RT_Powerup))
-		//{
-		//	if (ClassPathValid(PowerupsToReplace[index].NewClassPath))
-		//	{
-		//		NewPowerupPickupClass = class<UTPowerupPickupFactory>(DynamicLoadObject(PowerupsToReplace[index].NewClassPath, class'Class'));
-		//		if (NewPowerupPickupClass != none && Other.Class != NewPowerupPickupClass)
-		//		{
-		//			SpawnStaticActor(NewPowerupPickupClass, WorldInfo, Other.Owner,, Other.Location, Other.Rotation);
-		//			return false;
-		//		}
-		//	}
-		//	else
-		//	{
-		//		return false;
-		//	}
-		//}
+		// alternative powerup class replacement
+		else if (PowerupPickup.InventoryType != none && ShouldBeReplaced(index, PowerupPickup.InventoryType, RT_Powerup))
+		{
+			if (!ClassPathValid(PowerupsToReplace[index].NewClassPath) || !LoadClass(PowerupsToReplace[index].NewClassPath, NewClass))
+			{
+				// replace with nothing
+				return false;
+			}
+
+			if (class<Inventory>(NewClass) != none)
+			{
+				PowerupPickup.InventoryType = class<Inventory>(NewClass);
+				PowerupPickup.InitializePickup();
+			}
+			else if (SpawnNewPickup(PowerupPickup, class<Actor>(NewClass), bAbort) && bAbort != 0)
+			{
+				return false;
+			}
+		}
 	}
 
 	else if (UTDeployablePickupFactory(Other) != none)
 	{
 		DeployablePickup = UTDeployablePickupFactory(Other);
-		if (DeployablePickup.DeployablePickupClass != None)
+		if (DeployablePickup.DeployablePickupClass != None && ShouldBeReplaced(index, DeployablePickup.DeployablePickupClass, RT_Deployable) && !DeployablesToReplace[index].Options.bNoReplaceWeapon)
 		{
-			if (ShouldBeReplaced(index, DeployablePickup.DeployablePickupClass, RT_Deployable) && !DeployablesToReplace[index].Options.bNoReplaceWeapon)
+			if (!ClassPathValid(DeployablesToReplace[index].NewClassPath) || !LoadClass(DeployablesToReplace[index].NewClassPath, NewClass))
 			{
-				if (DeployablesToReplace[index].NewClassPath == "" || !LoadClass(DeployablesToReplace[index].NewClassPath, NewClass))
-				{
-					// replace with nothing
-					return false;
-				}
+				// replace with nothing
+				return false;
+			}
 
-				if (class<UTDeployable>(NewClass) != none)
-				{
-					DeployablePickup.DeployablePickupClass = class<UTDeployable>(NewClass);
-					DeployablePickup.InitializePickup();
-				}
-				else if (SpawnNewPickup(DeployablePickup, class<Actor>(NewClass), bAbort) && bAbort != 0)
-				{
-					return false;
-				}
+			if (class<UTDeployable>(NewClass) != none)
+			{
+				DeployablePickup.DeployablePickupClass = class<UTDeployable>(NewClass);
+				DeployablePickup.InitializePickup();
+			}
+			else if (SpawnNewPickup(DeployablePickup, class<Actor>(NewClass), bAbort) && bAbort != 0)
+			{
+				return false;
 			}
 		}
 
-		//if (ShouldBeReplaced(index, DeployablePickup.Class, RT_Deployable))
-		//{
-		//	if (ClassPathValid(DeployablesToReplace[index].NewClassPath))
-		//	{
-		//		NewDeployablePickupClass = class<UTDeployablePickupFactory>(DynamicLoadObject(DeployablesToReplace[index].NewClassPath, class'Class'));
-		//		if (NewDeployablePickupClass != none && Other.Class != NewDeployablePickupClass)
-		//		{
-		//			SpawnStaticActor(NewDeployablePickupClass, WorldInfo, Other.Owner,, Other.Location, Other.Rotation);
-		//			return false;
-		//		}
-		//	}
-		//	else
-		//	{
-		//		return false;
-		//	}
-		//}
+		// alternative deployable pickup factory replacement
+		else if (ShouldBeReplaced(index, DeployablePickup.Class, RT_Deployable))
+		{
+			if (!ClassPathValid(DeployablesToReplace[index].NewClassPath) || !LoadClass(DeployablesToReplace[index].NewClassPath, NewClass) || 
+				(Other.Class != NewClass && SpawnNewPickup(Other, class<Actor>(NewClass), bAbort) && bAbort != 0))
+			{
+				return false;
+			}
+		}
 	}
 
 	else if (UTVehicleFactory(Other) != none)
@@ -571,26 +564,24 @@ function bool CheckReplacement(Actor Other)
 			}
 		}
 
-		//if (VehicleFac.VehicleClass != None)
-		//{
-		//	if (ShouldBeReplaced(index, VehicleFac.VehicleClass, RT_Vehicle) && !VehiclesToReplace[index].Options.bNoReplaceWeapon)
-		//	{
-		//		if (VehiclesToReplace[index].NewClassPath == "" || !LoadClass(VehiclesToReplace[index].NewClassPath, NewClass))
-		//		{
-		//			// replace with nothing
-		//			return false;
-		//		}
+		// alternative vehicle class replacement
+		else if (VehicleFac.VehicleClass != None && ShouldBeReplaced(index, VehicleFac.VehicleClass, RT_Vehicle))
+		{
+			if (!ClassPathValid(VehiclesToReplace[index].NewClassPath) || !LoadClass(VehiclesToReplace[index].NewClassPath, NewClass))
+			{
+				// replace with nothing
+				return false;
+			}
 
-		//		if (class<UTVehicle>(NewClass) != none)
-		//		{
-		//			VehicleFac.VehicleClass = class<UTVehicle>(NewClass);
-		//		}
-		//		else if (SpawnNewPickup(VehicleFac, class<Actor>(NewClass), bAbort) && bAbort != 0)
-		//		{
-		//			return false;
-		//		}
-		//	}
-		//}
+			if (class<UTVehicle>(NewClass) != none)
+			{
+				VehicleFac.VehicleClass = class<UTVehicle>(NewClass);
+			}
+			else if (SpawnNewPickup(VehicleFac, class<Actor>(NewClass), bAbort) && bAbort != 0)
+			{
+				return false;
+			}
+		}
 	}
 
 	else if (PickupFactory(Other) != none)
@@ -605,26 +596,25 @@ function bool CheckReplacement(Actor Other)
 			}
 		}
 
-		//if (PickupFac.InventoryType != None)
-		//{
-		//	if (ShouldBeReplaced(index, PickupFac.InventoryType, RT_Custom) && !CustomsToReplace[index].Options.bNoReplaceWeapon)
-		//	{
-		//		if (CustomsToReplace[index].NewClassPath == "" || !LoadClass(CustomsToReplace[index].NewClassPath, NewClass))
-		//		{
-		//			// replace with nothing
-		//			return false;
-		//		}
+		// alternative powerup class replacement
+		else if (PickupFac.InventoryType != none && ShouldBeReplaced(index, PickupFac.InventoryType, RT_Custom))
+		{
+			if (!ClassPathValid(CustomsToReplace[index].NewClassPath) || !LoadClass(CustomsToReplace[index].NewClassPath, NewClass))
+			{
+				// replace with nothing
+				return false;
+			}
 
-		//		if (class<Inventory>(NewClass) != none)
-		//		{
-		//			PickupFac.InventoryType = class<Inventory>(NewClass);
-		//		}
-		//		else if (SpawnNewPickup(PickupFac, class<Actor>(NewClass), bAbort) && bAbort != 0)
-		//		{
-		//			return false;
-		//		}
-		//	}
-		//}
+			if (class<Inventory>(NewClass) != none)
+			{
+				PickupFac.InventoryType = class<Inventory>(NewClass);
+				PickupFac.InitializePickup();
+			}
+			else if (SpawnNewPickup(PickupFac, class<Actor>(NewClass), bAbort) && bAbort != 0)
+			{
+				return false;
+			}
+		}
 	}
 
 	// remove initial anim for Enforcers (may only work on server/listen player)
