@@ -18,3 +18,7 @@ PowerupConfig TestCWR_ConfigPowerup
 
 DeployableRemove TestCWR_NoDeployable
 DeployableConfig TestCWR_ConfigDeployable
+
+VehicleConfig TestCWR_ConfigVehicle
+VehicleHoverboard TestCWR_Hoverboard
+VehicleRemove TestCWR_NoVehicle
