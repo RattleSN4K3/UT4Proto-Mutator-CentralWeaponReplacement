@@ -1,9 +1,9 @@
-class TestCWR_ConfigHealthUIConfig extends UTUIFrontEnd;
+class TestCWR_ConfigPowerupUIConfig extends UTUIFrontEnd;
 
 var transient localized string Title;
 
 /** Replacement info. */
-var transient name HealthClassToReplace;
+var transient name PowerupClassToReplace;
 
 /** Reference to the pickup combo box. */
 var transient UTUIComboBox PickupCombo;
@@ -22,7 +22,7 @@ event PostInitialize()
 {
 	Super.PostInitialize();
 
-	HealthClassToReplace = class'TestCWR_ConfigHealthMutatorCWR'.default.ReplaceHealthClassName;
+	PowerupClassToReplace = class'TestCWR_ConfigPowerupMutatorCWR'.default.ReplacePowerupClassName;
 
 	// Get datastore references
 	StringListDataStore = UTUIDataStore_StringList(FindDataStore('UTStringList'));
@@ -101,9 +101,9 @@ function OnAccept()
 	index = PickupCombo.ComboList.GetCurrentItem();
 	if (PickupCombo.ComboList.Items.Length > 0 && index != INDEX_NONE)
 	{
-		class'TestCWR_ConfigHealthMutatorCWR'.default.ReplaceHealthClassName= PickupClassNames[index];
-		class'TestCWR_ConfigHealthMutatorCWR'.default.ReplaceHealthOptions = defaultoptions;
-		class'TestCWR_ConfigHealthMutatorCWR'.static.StaticSaveConfig();
+		class'TestCWR_ConfigPowerupMutatorCWR'.default.ReplacePowerupClassName= PickupClassNames[index];
+		class'TestCWR_ConfigPowerupMutatorCWR'.default.ReplacePowerupOptions = defaultoptions;
+		class'TestCWR_ConfigPowerupMutatorCWR'.static.StaticSaveConfig();
 	}
 
 	CloseScene(self);
@@ -127,25 +127,30 @@ function BuildPickupOptions()
 	PickupFriendlyNames.length = 0;
 
 	SelectedIndex = INDEX_NONE;
-	index = StringListDataStore.Num('HealthSelection');
+	index = StringListDataStore.Num('PowerupSelection');
 	if (index <= 0)
 	{
 		UIController = GetCurrentUIController();
 		if (UIController != none && UIController.Outer != None)
 		{
 			// fix to have the package UTGameContent loaded
-			DynamicLoadObject("UTGameContent.UTPickupFactory_SuperHealth", class'class');
+			DynamicLoadObject("UTGameContent.UTPickupFactory_UDamage", class'class');
+			DynamicLoadObject("UTGameContent.UTPickupFactory_JumpBoots", class'class');
+			DynamicLoadObject("UTGameContent.UTPickupFactory_Invulnerability", class'class');
+			DynamicLoadObject("UTGameContent.UTPickupFactory_Invisibility", class'class');
+			DynamicLoadObject("UTGameContent.UTPickupFactory_Berserk", class'class');
+			DynamicLoadObject("UT3Gold.UTPickupFactory_SlowField", class'class');
 
 			str = UIController.Outer.ConsoleCommand("obj classes");
 			ParseStringIntoArray(str, lines, Chr(10), true);
 
-			index = lines.Find("            UTHealthPickupFactory");
+			index = lines.Find("          UTPowerupPickupFactory");
 			if (index == INDEX_NONE)
 			{
 				for (i=0; i<lines.Length; i++)
 				{
 					ClassStr = TrimWhitespace(lines[i]);
-					if (ClassStr ~= "UTHealthPickupFactory")
+					if (ClassStr ~= "UTPowerupPickupFactory")
 					{
 						PrefixCount = Len(lines[i])-Len(ClassStr);
 						index = i;
@@ -170,16 +175,16 @@ function BuildPickupOptions()
 			}		
 		}
 
-		StringListDataStore.Empty('HealthSelection', true);
-		StringListDataStore.Empty('HealthSelectionClass', true);
+		StringListDataStore.Empty('PowerupSelection', true);
+		StringListDataStore.Empty('PowerupSelectionClass', true);
 		PickupFriendlyNames.Length = PickupClassNames.Length;
 		for(i=0; i<PickupClassNames.length; i++)
 		{
 			PickupFriendlyNames[i] = ""$PickupClassNames[i];
-			StringListDataStore.AddStr('HealthSelection', PickupFriendlyNames[i], true);
-			StringListDataStore.AddStr('HealthSelectionClass', ""$PickupClassNames[i], true);
+			StringListDataStore.AddStr('PowerupSelection', PickupFriendlyNames[i], true);
+			StringListDataStore.AddStr('PowerupSelectionClass', ""$PickupClassNames[i], true);
 			
-			if (SelectedIndex == INDEX_NONE && PickupClassNames[i] == HealthClassToReplace)
+			if (SelectedIndex == INDEX_NONE && PickupClassNames[i] == PowerupClassToReplace)
 			{
 				SelectedIndex = i;
 				SelectedString = PickupFriendlyNames[i];
@@ -191,10 +196,10 @@ function BuildPickupOptions()
 		PickupClassNames.Length = index;
 		for (i=0; i<index; i++)
 		{
-			str = StringListDataStore.GetStr('HealthSelectionClass', i);
+			str = StringListDataStore.GetStr('PowerupSelectionClass', i);
 			PickupClassNames[i] = name(str);
 
-			if (SelectedIndex == INDEX_NONE && PickupClassNames[i] == HealthClassToReplace)
+			if (SelectedIndex == INDEX_NONE && PickupClassNames[i] == PowerupClassToReplace)
 			{
 				SelectedIndex = i;
 			}
@@ -203,7 +208,7 @@ function BuildPickupOptions()
 		PickupFriendlyNames.Length = index;
 		for (i=0; i<index; i++)
 		{
-			str = StringListDataStore.GetStr('HealthSelection', i);
+			str = StringListDataStore.GetStr('PowerupSelection', i);
 			PickupFriendlyNames[i] = str;
 
 			if (SelectedIndex != INDEX_NONE && i == SelectedIndex)
@@ -213,8 +218,8 @@ function BuildPickupOptions()
 		}
 	}
 
-	PickupCombo.ComboList.SetDataStoreBinding("<"$StringListDataStore.tag$":HealthSelection>");
-	StringListDataStore.RefreshSubscribers('HealthSelection');
+	PickupCombo.ComboList.SetDataStoreBinding("<"$StringListDataStore.tag$":PowerupSelection>");
+	StringListDataStore.RefreshSubscribers('PowerupSelection');
 
 	if (SelectedIndex != INDEX_NONE)
 	{
@@ -225,5 +230,5 @@ function BuildPickupOptions()
 
 DefaultProperties
 {
-	Title="[Config Vials mutator (CWR)]" 
+	Title="[Config JumpBoots Mutator (CWR)]" 
 }
