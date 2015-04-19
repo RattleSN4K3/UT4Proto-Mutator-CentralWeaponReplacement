@@ -1083,109 +1083,26 @@ function AddToLocker(class<UTWeapon> WeaponClass, ReplacementLockerInfo LockerOp
 function bool ShouldBeReplaced(out int index, class ClassToCheck, EReplacementType ReplacementType)
 {
 	local int i;
-	if (ReplacementType == RT_Ammo)
-	{
-		index = AmmoToReplace.Find('OldClassName', ClassToCheck.Name);
-		if (index == INDEX_NONE)
-		{
-			for (i=0; i<AmmoToReplace.Length; i++)
-			{
-				if (AmmoToReplace[i].Options.bSubClasses && IsSubClass(ClassToCheck, AmmoToReplace[i].OldClassName))
-				{
-					index = i;
-					return true;
-				}
-			}
-		}
-	}
-	else if (ReplacementType == RT_Weapon)
-	{
-		index = WeaponsToReplace.Find('OldClassName', ClassToCheck.Name);
-		if (index == INDEX_NONE)
-		{
-			for (i=0; i<WeaponsToReplace.Length; i++)
-			{
-				if (WeaponsToReplace[i].Options.bSubClasses && 
-					IsSubClass(ClassToCheck, WeaponsToReplace[i].OldClassName) &&
-					!IgnoreSubClass(ClassToCheck, WeaponsToReplace[i].Options.IgnoreSubClasses))
-				{
-					index = i;
-					return true;
-				}
-			}
-		}
-	}
-	else if (ReplacementType == RT_Health)
-	{
-		index = HealthToReplace.Find('OldClassName', ClassToCheck.Name);
-		if (index == INDEX_NONE)
-		{
-			for (i=0; i<HealthToReplace.Length; i++)
-			{
-				if (HealthToReplace[i].Options.bSubClasses && 
-					IsSubClass(ClassToCheck, HealthToReplace[i].OldClassName) &&
-					!IgnoreSubClass(ClassToCheck, HealthToReplace[i].Options.IgnoreSubClasses))
-				{
-					index = i;
-					return true;
-				}
-			}
-		}
-	}
-	else if (ReplacementType == RT_Armor)
-	{
-		index = ArmorToReplace.Find('OldClassName', ClassToCheck.Name);
-		if (index == INDEX_NONE)
-		{
-			for (i=0; i<ArmorToReplace.Length; i++)
-			{
-				if (ArmorToReplace[i].Options.bSubClasses && 
-					IsSubClass(ClassToCheck, ArmorToReplace[i].OldClassName) &&
-					!IgnoreSubClass(ClassToCheck, ArmorToReplace[i].Options.IgnoreSubClasses))
-				{
-					index = i;
-					return true;
-				}
-			}
-		}
-	}
+	local array<ReplacementInfoEx> Replacements;
 	
-	else if (ReplacementType == RT_Powerup)
+	if (GetReplacements(self, ReplacementType, Replacements))
 	{
-		index = PowerupsToReplace.Find('OldClassName', ClassToCheck.Name);
-		if (index == INDEX_NONE)
+		index = Replacements.Find('OldClassName', ClassToCheck.Name);
+		if (index != INDEX_NONE) return true;
+
+		for (i=0; i<Replacements.Length; i++)
 		{
-			for (i=0; i<PowerupsToReplace.Length; i++)
+			if (Replacements[i].Options.bSubClasses && 
+				IsSubClass(ClassToCheck, Replacements[i].OldClassName) &&
+				!IgnoreSubClass(ClassToCheck, Replacements[i].Options.IgnoreSubClasses))
 			{
-				if (PowerupsToReplace[i].Options.bSubClasses && 
-					IsSubClass(ClassToCheck, PowerupsToReplace[i].OldClassName) &&
-					!IgnoreSubClass(ClassToCheck, PowerupsToReplace[i].Options.IgnoreSubClasses))
-				{
-					index = i;
-					return true;
-				}
-			}
-		}
-	}
-	else if (ReplacementType == RT_Deployable)
-	{
-		index = DeployablesToReplace.Find('OldClassName', ClassToCheck.Name);
-		if (index == INDEX_NONE)
-		{
-			for (i=0; i<DeployablesToReplace.Length; i++)
-			{
-				if (DeployablesToReplace[i].Options.bSubClasses && 
-					IsSubClass(ClassToCheck, DeployablesToReplace[i].OldClassName) &&
-					!IgnoreSubClass(ClassToCheck, DeployablesToReplace[i].Options.IgnoreSubClasses))
-				{
-					index = i;
-					return true;
-				}
+				index = i;
+				return true;
 			}
 		}
 	}
 
-	return index != INDEX_NONE;
+	return false;
 }
 
 function bool ShouldBeReplacedLocker(UTWeaponLocker Locker, ReplacementLockerInfo LockerOptions)
