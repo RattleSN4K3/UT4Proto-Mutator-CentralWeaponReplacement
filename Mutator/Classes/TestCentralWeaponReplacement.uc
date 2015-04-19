@@ -579,7 +579,7 @@ function bool CheckReplacement(Actor Other)
 		if (ShouldBeReplaced(index, VehicleFac.Class, RT_Vehicle))
 		{
 			if (!ClassPathValid(VehiclesToReplace[index].NewClassPath) || !LoadClass(VehiclesToReplace[index].NewClassPath, NewClass) || 
-				(Other.Class != NewClass && SpawnNewPickup(Other, class<Actor>(NewClass), VehiclesToReplace[index].Options.SpawnOptions, bAbort) && bAbort != 0))
+				(Other.Class != NewClass && SpawnNewPickup(Other, class<Actor>(NewClass), VehiclesToReplace[index].Options.SpawnOptions, bAbort,, class<UTVehicleFactory>(NewClass) == none, VehicleFac.SpawnZOffset + VehicleFac.CollisionComponent.Bounds.BoxExtent.Z) && bAbort != 0))
 			{
 				return false;
 			}
@@ -602,7 +602,7 @@ function bool CheckReplacement(Actor Other)
 				VehicleFac.VehicleClassPath = PathName(NewClass);
 				VehicleFac.VehicleClass = class<UTVehicle>(NewClass);
 			}
-			else if (SpawnNewPickup(VehicleFac, class<Actor>(NewClass), VehiclesToReplace[index].Options.SpawnOptions, bAbort) && bAbort != 0)
+			else if (SpawnNewPickup(VehicleFac, class<Actor>(NewClass), VehiclesToReplace[index].Options.SpawnOptions, bAbort,, class<UTVehicleFactory>(NewClass) == none, VehicleFac.SpawnZOffset + VehicleFac.CollisionComponent.Bounds.BoxExtent.Z) && bAbort != 0)
 			{
 				VehicleFac.VehicleClassPath = "";
 				VehicleFac.VehicleClass = none;
@@ -1244,12 +1244,16 @@ function bool ShouldBeReplacedLocker(UTWeaponLocker Locker, ReplacementLockerInf
 		LockerOptions.Tags.Find(Locker.Group) != INDEX_NONE;
 }
 
-function bool SpawnNewPickup(Actor Other, class<Actor> ActorClass, ReplacementSpawnInfo SpawnOptions, out byte OutAbort, optional out Actor NewActor)
+function bool SpawnNewPickup(Actor Other, class<Actor> ActorClass, ReplacementSpawnInfo SpawnOptions, out byte OutAbort, optional out Actor NewActor, optional bool bTryToAlign, optional float MaxTrace = 100.0)
 {
 	local vector SpawnLocation;
 	local rotator SpawnRotation;
 	//local float SpawnScale;
 	//local vector SpawnScale3D;
+
+	local vector HitLocation;
+	local vector HitNormal;
+	local Vector TraceExtent;
 
 	if (ActorClass == none)
 		return false;
@@ -1265,6 +1269,27 @@ function bool SpawnNewPickup(Actor Other, class<Actor> ActorClass, ReplacementSp
 	SpawnRotation += SpawnOptions.OffsetRotation;
 	//SpawnScale += SpawnOptions.OffsetScale;
 	//SpawnScale3D += SpawnOptions.OffsetScale3D;
+
+	// snap/align new actor to floor
+	if(!SpawnOptions.OverrideLocation && bTryToAlign && MaxTrace != 0.0)
+	{
+		TraceExtent = vect(1,1,1);
+		if(CylinderComponent(ActorClass.default.CollisionComponent) != none)
+		{
+			TraceExtent.Z = CylinderComponent(ActorClass.default.CollisionComponent).CollisionHeight;
+		}
+
+		HitLocation = SpawnLocation-(vect(0,0,1)*MaxTrace);
+		if (WorldInfo.Trace(HitLocation, HitNormal, HitLocation, SpawnLocation, false, TraceExtent, /*HitInfo*/, TRACEFLAG_PhysicsVolumes) != none)
+		{
+			SpawnLocation = HitLocation;
+			if (!SpawnOptions.OverrideRotation)
+			{
+				SpawnRotation = rotator(HitNormal);
+				SpawnRotation.Pitch -= 16384;
+			}
+		}
+	}
 
 	SpawnStaticActor(ActorClass, Other.WorldInfo, Other.Owner,, SpawnLocation, SpawnRotation,, NewActor);
 	//if (NewActor != none)
