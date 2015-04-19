@@ -14,6 +14,7 @@ enum EReplacementType
 	RT_Armor,
 	RT_Powerup,
 	RT_Deployable,
+	RT_Vehicle,
 };
 
 //**********************************************************************************
@@ -143,6 +144,8 @@ var private transient config array<ReplacementInfoEx> StaticPowerupsToReplace;
 /** @ignore */
 var private transient config array<ReplacementInfoEx> StaticDeployablesToReplace;
 /** @ignore */
+var private transient config array<ReplacementInfoEx> StaticVehiclesToReplace;
+/** @ignore */
 var private transient config array<name> StaticOrder;
 /** @ignore */
 var private transient config bool StaticBatchOp;
@@ -158,6 +161,8 @@ var config array<ReplacementInfoEx> DefaultArmorToReplace;
 var config array<ReplacementInfoEx> DefaultPowerupsToReplace;
 var config array<ReplacementInfoEx> DefaultDeployablesToReplace;
 
+var config array<ReplacementInfoEx> DefaultVehiclesToReplace;
+
 // Workflow
 // ------------
 
@@ -168,6 +173,8 @@ var array<ReplacementInfoEx> HealthToReplace;
 var array<ReplacementInfoEx> ArmorToReplace;
 var array<ReplacementInfoEx> PowerupsToReplace;
 var array<ReplacementInfoEx> DeployablesToReplace;
+
+var array<ReplacementInfoEx> VehiclesToReplace;
 
 
 var TestCWRUI DataCache;
@@ -198,6 +205,8 @@ event PreBeginPlay()
 		PowerupsToReplace.Length = 0;
 		DeployablesToReplace.Length = 0;
 
+		VehiclesToReplace.Length = 0;
+
 		for (i=0; i<DefaultWeaponsToReplace.Length; i++)
 			RegisterWeaponReplacement(none, DefaultWeaponsToReplace[i].OldClassName, DefaultWeaponsToReplace[i].NewClassPath, RT_Weapon, DefaultWeaponsToReplace[i].Options);
 
@@ -215,6 +224,9 @@ event PreBeginPlay()
 
 		for (i=0; i<DefaultDeployablesToReplace.Length; i++)
 			RegisterWeaponReplacement(none, DefaultDeployablesToReplace[i].OldClassName, DefaultDeployablesToReplace[i].NewClassPath, RT_Deployable, DefaultDeployablesToReplace[i].Options);
+
+		for (i=0; i<DefaultVehiclesToReplace.Length; i++)
+			RegisterWeaponReplacement(none, DefaultVehiclesToReplace[i].OldClassName, DefaultVehiclesToReplace[i].NewClassPath, RT_Vehicle, DefaultVehiclesToReplace[i].Options);
 	}
 }
 
@@ -244,6 +256,8 @@ function InitMutator(string Options, out string ErrorMessage)
 		RegisterWeaponReplacementArray(CurrentProfile, CurrentProfile.ArmorToReplace, RT_Armor);
 		RegisterWeaponReplacementArray(CurrentProfile, CurrentProfile.PowerupsToReplace, RT_Powerup);
 		RegisterWeaponReplacementArray(CurrentProfile, CurrentProfile.DeployablesToReplace, RT_Deployable);
+
+		RegisterWeaponReplacementArray(CurrentProfile, CurrentProfile.VehiclesToReplace, RT_Vehicle);
 	}
 
 	// Make sure the game does not hold a null reference
@@ -333,6 +347,7 @@ function bool CheckReplacement(Actor Other)
 	local UTArmorPickupFactory ArmorPickup;
 	local UTPowerupPickupFactory PowerupPickup;
 	local UTDeployablePickupFactory DeployablePickup;
+	local UTVehicleFactory VehicleFac;
 	local int i, Index;
 	local class NewClass;
 	local byte bAbort;
@@ -537,6 +552,40 @@ function bool CheckReplacement(Actor Other)
 		//}
 	}
 
+	else if (UTVehicleFactory(Other) != none)
+	{
+		VehicleFac = UTVehicleFactory(Other);
+		if (ShouldBeReplaced(index, VehicleFac.Class, RT_Vehicle))
+		{
+			if (!ClassPathValid(VehiclesToReplace[index].NewClassPath) || !LoadClass(VehiclesToReplace[index].NewClassPath, NewClass) || 
+				(Other.Class != NewClass && SpawnNewPickup(Other, class<Actor>(NewClass), bAbort) && bAbort != 0))
+			{
+				return false;
+			}
+		}
+
+		//if (VehicleFac.VehicleClass != None)
+		//{
+		//	if (ShouldBeReplaced(index, VehicleFac.VehicleClass, RT_Vehicle) && !VehiclesToReplace[index].Options.bNoReplaceWeapon)
+		//	{
+		//		if (VehiclesToReplace[index].NewClassPath == "" || !LoadClass(VehiclesToReplace[index].NewClassPath, NewClass))
+		//		{
+		//			// replace with nothing
+		//			return false;
+		//		}
+
+		//		if (class<UTVehicle>(NewClass) != none)
+		//		{
+		//			VehicleFac.VehicleClass = class<UTVehicle>(NewClass);
+		//		}
+		//		else if (SpawnNewPickup(VehicleFac, class<Actor>(NewClass), bAbort) && bAbort != 0)
+		//		{
+		//			return false;
+		//		}
+		//	}
+		//}
+	}
+
 	// remove initial anim for Enforcers (may only work on server/listen player)
 	else if (EnforcerIndizes.Length > 1 && UTWeap_Enforcer(Other) != none)
 	{
@@ -673,6 +722,8 @@ function UnRegisterWeaponReplacement(Object Registrar)
 	RemoveReplacementFromArray(ArmorToReplace, Registrar);
 	RemoveReplacementFromArray(PowerupsToReplace, Registrar);
 	RemoveReplacementFromArray(DeployablesToReplace, Registrar);
+
+	RemoveReplacementFromArray(VehiclesToReplace, Registrar);
 }
 
 static function bool StaticRegisterWeaponReplacement(Object Registrar, coerce name OldClassName, string NewClassPath, EReplacementType ReplacementType, optional ReplacementOptionsInfo ReplacementOptions, optional bool bPre, optional bool bOnlyCheck, optional out string ErrorMessage)
@@ -808,6 +859,8 @@ static function StaticPreInitialize()
 	default.StaticPowerupsToReplace.Length = 0;
 	default.StaticDeployablesToReplace.Length = 0;
 
+	default.StaticVehiclesToReplace.Length = 0;
+
 	default.StaticOrder.Length = 0;
 	default.StaticBatchOp = false;
 
@@ -833,6 +886,9 @@ static function StaticPreInitialize()
 
 	for (i=0; i<default.StaticDeployablesToReplace.Length; i++)
 		StaticRegisterWeaponReplacement(none, default.StaticDeployablesToReplace[i].OldClassName, default.StaticDeployablesToReplace[i].NewClassPath, RT_Deployable, default.StaticDeployablesToReplace[i].Options, true);
+
+	for (i=0; i<default.StaticVehiclesToReplace.Length; i++)
+		StaticRegisterWeaponReplacement(none, default.StaticVehiclesToReplace[i].OldClassName, default.StaticVehiclesToReplace[i].NewClassPath, RT_Vehicle, default.StaticVehiclesToReplace[i].Options, true);
 }
 
 static function StaticPreDestroy()
@@ -846,6 +902,8 @@ static function StaticPreDestroy()
 	default.StaticArmorToReplace.Length = 0;
 	default.StaticPowerupsToReplace.Length = 0;
 	default.StaticDeployablesToReplace.Length = 0;
+
+	default.StaticVehiclesToReplace.Length = 0;
 
 	default.StaticOrder.Length = 0;
 	default.StaticBatchOp = false;
@@ -918,6 +976,8 @@ static private function bool StaticPreUnRegisterWeaponReplacement(Object Registr
 	bAnyRemoved = RemoveReplacementFromArray(default.StaticPowerupsToReplace, Registrar) || bAnyRemoved;
 	bAnyRemoved = RemoveReplacementFromArray(default.StaticDeployablesToReplace, Registrar) || bAnyRemoved;
 
+	bAnyRemoved = RemoveReplacementFromArray(default.StaticVehiclesToReplace, Registrar) || bAnyRemoved;
+
 	// remove order entry (skip otherwise to keep order for updating)
 	if (!default.StaticBatchOp) default.StaticOrder.RemoveItem(Registrar.Name);
 
@@ -972,6 +1032,8 @@ static function bool GetReplacements(Object Context, EReplacementType Replacemen
 	case RT_Armor: Replacements = IsStatic ? default.StaticArmorToReplace : ContextObj.ArmorToReplace;break;
 	case RT_Powerup: Replacements = IsStatic ? default.StaticPowerupsToReplace : ContextObj.PowerupsToReplace;break;
 	case RT_Deployable: Replacements = IsStatic ? default.StaticDeployablesToReplace : ContextObj.DeployablesToReplace;break;
+
+	case RT_Vehicle: Replacements = IsStatic ? default.StaticVehiclesToReplace: ContextObj.VehiclesToReplace;break;
 	default: return false;
 	}
 
@@ -991,6 +1053,7 @@ static function bool SetReplacements(Object Context, EReplacementType Replacemen
 		else if (ReplacementType == RT_Armor) default.StaticArmorToReplace = Replacements;
 		else if (ReplacementType == RT_Powerup) default.StaticPowerupsToReplace = Replacements;
 		else if (ReplacementType == RT_Deployable) default.StaticDeployablesToReplace = Replacements;
+		else if (ReplacementType == RT_Vehicle) default.StaticVehiclesToReplace= Replacements;
 		else return false;
 	}
 	else
@@ -1003,6 +1066,8 @@ static function bool SetReplacements(Object Context, EReplacementType Replacemen
 		case RT_Armor: ContextObj.ArmorToReplace = Replacements;break;
 		case RT_Powerup: ContextObj.PowerupsToReplace = Replacements;break;
 		case RT_Deployable: ContextObj.DeployablesToReplace = Replacements;break;
+
+		case RT_Vehicle: ContextObj.VehiclesToReplace = Replacements;break;
 		default: return false;
 		}
 	}

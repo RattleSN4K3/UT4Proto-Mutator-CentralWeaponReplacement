@@ -17,6 +17,8 @@ var config array<TemplateInfo> ArmorToReplace;
 var config array<TemplateInfo> PowerupsToReplace;
 var config array<TemplateInfo> DeployablesToReplace;
 
+var config array<TemplateInfo> VehiclesToReplace;
+
 //**********************************************************************************
 // Static functions
 //**********************************************************************************
