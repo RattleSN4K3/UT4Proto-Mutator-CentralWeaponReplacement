@@ -899,6 +899,10 @@ static private function bool StaticPreRegisterWeaponReplacement(Object Registrar
 		{
 			ErrorMessage = class'TestCWRUI'.static.GetData().GetErrorMessage(Replacements[index].Registrar, Registrar, OldClassName, NewClassPath);
 		}
+		else
+		{
+			bSuccess = true;
+		}
 
 		SetReplacements(default.Class, ReplacementType, Replacements);
 	}
