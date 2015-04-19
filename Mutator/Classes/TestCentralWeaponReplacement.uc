@@ -212,6 +212,10 @@ var array<ErrorMessageInfo> ErrorMessages;
 
 var array<int> EnforcerIndizes;
 
+/** Flag. Set when hoverboard is is going to be placed on each spawn of a player */
+var bool bReplaceHoverboard;
+var class<UTVehicle> HoverboardClass;
+
 var string CurrentProfileName;
 var TestCWRMapProfile CurrentProfile;
 
@@ -271,6 +275,7 @@ function InitMutator(string Options, out string ErrorMessage)
 	local UTGame G;
 	local class<Inventory> InventoryClass;
 	local TestCWRMapProfile MapProvider;
+	local class NewClass;
 
 	super.InitMutator(Options, ErrorMessage);
 
@@ -365,6 +370,20 @@ function InitMutator(string Options, out string ErrorMessage)
 			if (IsSubClass(G.DefaultInventory[i], 'UTWeap_Enforcer'))
 			{
 				EnforcerIndizes.AddItem(i);
+			}
+		}
+
+		// check if hoverboard should be replaced
+		for (i=0; i<VehiclesToReplace.length; i++)
+		{
+			if (VehiclesToReplace[i].OldClassName == 'UTVehicle_Hoverboard' &&
+				ClassPathValid(VehiclesToReplace[i].NewClassPath) &&
+				LoadClass(VehiclesToReplace[i].NewClassPath, NewClass) &&
+				class<UTVehicle>(NewClass) != none)
+			{
+				bReplaceHoverboard = true;
+				HoverboardClass = class<UTVehicle>(NewClass);
+				break;
 			}
 		}
 	}
@@ -588,6 +607,9 @@ function bool CheckReplacement(Actor Other)
 			if (!ClassPathValid(VehiclesToReplace[index].NewClassPath) || !LoadClass(VehiclesToReplace[index].NewClassPath, NewClass) || 
 				(Other.Class != NewClass && SpawnNewPickup(Other, class<Actor>(NewClass), VehiclesToReplace[index].Options.SpawnOptions, bAbort,, class<UTVehicleFactory>(NewClass) == none, VehicleFac.SpawnZOffset + VehicleFac.CollisionComponent.Bounds.BoxExtent.Z) && bAbort != 0))
 			{
+				VehicleFac.VehicleClassPath = "";
+				VehicleFac.VehicleClass = none;
+				VehicleFac.Deactivate();
 				return false;
 			}
 		}
@@ -689,6 +711,13 @@ function ModifyPlayer(Pawn Other)
 				}
 			}
 		}
+	}
+
+	// replace hoverboard class
+	if (bReplaceHoverboard && UTPawn(Other) != none)
+	{
+		UTPawn(Other).bHasHoverboard = true;
+		UTPawn(Other).HoverboardClass = HoverboardClass;
 	}
 }
 
