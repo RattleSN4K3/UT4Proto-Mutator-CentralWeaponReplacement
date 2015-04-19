@@ -10,8 +10,8 @@ var array<TemplateInfo> HealthToReplace;
 var array<TemplateInfo> ArmorToReplace;
 var array<TemplateInfo> PowerupsToReplace;
 var array<TemplateInfo> DeployablesToReplace;
-
 var array<TemplateInfo> VehiclesToReplace;
+var array<TemplateInfo> CustomsToReplace;
  
 var const bool bAutoDestroy;
 
@@ -33,6 +33,7 @@ event PreBeginPlay()
 		RegisterByArray(Registrar, PowerupsToReplace, RT_Powerup);
 		RegisterByArray(Registrar, DeployablesToReplace, RT_Deployable);
 		RegisterByArray(Registrar, VehiclesToReplace, RT_Vehicle);
+		RegisterByArray(Registrar, CustomsToReplace, RT_Custom);
 
 		StaticGetDynamicReplacements(Replacements);
 		for (i=0; i<Replacements.Length; i++)
@@ -156,8 +157,8 @@ static protected function bool StaticIsConflicting(optional out string ErrorMess
 	bConflicting = bConflicting || !RegisterByArray(default.Class, default.ArmorToReplace, RT_Armor, true, true, ErrorMessage);
 	bConflicting = bConflicting || !RegisterByArray(default.Class, default.PowerupsToReplace, RT_Powerup, true, true, ErrorMessage);
 	bConflicting = bConflicting || !RegisterByArray(default.Class, default.DeployablesToReplace, RT_Deployable, true, true, ErrorMessage);
-
 	bConflicting = bConflicting || !RegisterByArray(default.Class, default.VehiclesToReplace, RT_Vehicle, true, true, ErrorMessage);
+	bConflicting = bConflicting || !RegisterByArray(default.Class, default.CustomsToReplace, RT_Custom, true, true, ErrorMessage);
 
 	if (!bConflicting)
 	{
@@ -187,8 +188,8 @@ static protected function StaticInitialize()
 	RegisterByArray(default.Class, default.ArmorToReplace, RT_Armor, true);
 	RegisterByArray(default.Class, default.PowerupsToReplace, RT_Powerup, true);
 	RegisterByArray(default.Class, default.DeployablesToReplace, RT_Deployable, true);
-
 	RegisterByArray(default.Class, default.VehiclesToReplace, RT_Vehicle, true);
+	RegisterByArray(default.Class, default.CustomsToReplace, RT_Custom, true);
 
 	StaticGetDynamicReplacements(Replacements);
 	for (i=0; i<Replacements.Length; i++)

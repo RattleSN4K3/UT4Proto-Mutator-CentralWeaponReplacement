@@ -19,6 +19,8 @@ var config array<TemplateInfo> DeployablesToReplace;
 
 var config array<TemplateInfo> VehiclesToReplace;
 
+var config array<TemplateInfo> CustomsToReplace;
+
 //**********************************************************************************
 // Static functions
 //**********************************************************************************
