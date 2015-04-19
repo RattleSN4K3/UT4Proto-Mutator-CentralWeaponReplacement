@@ -5,6 +5,7 @@ WeaponRail TestCWR_RailGun
 WeaponRemove TestCWR_NoWeapon
 WeaponConfig TestCWR_ConfigWeapon
 WeaponSubclass TestCWR_SubclassWeapon
+WeaponTranslocator TestCWR_Translocator
 
 HealthRemove TestCWR_NoHealth
 HealthConfig TestCWR_ConfigHealth
