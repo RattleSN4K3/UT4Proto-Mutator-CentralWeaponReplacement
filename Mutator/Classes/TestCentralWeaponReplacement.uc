@@ -49,12 +49,18 @@ struct ReplacementLockerInfo
 
 struct ReplacementSpawnInfo
 {
+	/** Whether to override the Location of this Actor */
 	var bool OverrideLocation;
+	/** The Location to use when the location is overridden */
 	var Vector Location;
+	/** A relative 3D-coordinate value to offset the position */
 	var Vector OffsetLocation;	
 
+	/** Whether to override the Rotation of this Actor */
 	var bool OverrideRotation;
+	/** The Rotation to use when the location is overridden */
 	var Rotator Rotation;
+	/** A relative 3D-coordinate value to offset the base rotation */
 	var Rotator OffsetRotation;
 
 	//var bool OverrideScale;
@@ -332,21 +338,22 @@ function InitMutator(string Options, out string ErrorMessage)
 			{
 				AddToLocker(class<UTWeapon>(InventoryClass), WeaponsToReplace[j].Options.LockerOptions);
 			}
-		}
 
-		if (G.TranslocatorClass != None)
-		{
-			j = WeaponsToReplace.Find('OldClassName', G.TranslocatorClass.Name);
-			if (j != INDEX_NONE)
+			// replace translocator (checking for subclass as well if desired)
+			if (G.TranslocatorClass != None)
 			{
-				if (InventoryClass == none || WeaponsToReplace[j].Options.bNoReplaceWeapon)
+				if ((!WeaponsToReplace[j].Options.bSubClasses && G.TranslocatorClass.Name == WeaponsToReplace[j].OldClassName) ||
+					(WeaponsToReplace[j].Options.bSubClasses && IsSubClass(G.TranslocatorClass, WeaponsToReplace[j].OldClassName)))
 				{
-					// replace with nothing
-					G.TranslocatorClass = None;
-				}
-				else
-				{
-					G.TranslocatorClass = InventoryClass;
+					if (InventoryClass == none || WeaponsToReplace[j].Options.bNoReplaceWeapon)
+					{
+						// replace with nothing
+						G.TranslocatorClass = None;
+					}
+					else
+					{
+						G.TranslocatorClass = InventoryClass;
+					}
 				}
 			}
 		}
