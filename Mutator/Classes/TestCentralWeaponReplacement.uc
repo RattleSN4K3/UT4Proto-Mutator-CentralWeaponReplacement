@@ -224,7 +224,7 @@ function InitMutator(string Options, out string ErrorMessage)
 {
 	local int i, j;
 	local UTGame G;
-	local class<UTWeapon> WeaponClass;
+	local class<Inventory> InventoryClass;
 	local TestCWRMapProfile MapProvider;
 
 	super.InitMutator(Options, ErrorMessage);
@@ -252,10 +252,10 @@ function InitMutator(string Options, out string ErrorMessage)
 	{
 		for (j=0; j<WeaponsToReplace.Length; j++)
 		{
-			WeaponClass = none;
+			InventoryClass = none;
 			if (ClassPathValid(WeaponsToReplace[j].NewClassPath))
 			{
-				WeaponClass = class<UTWeapon>(DynamicLoadObject(WeaponsToReplace[j].NewClassPath, class'Class'));
+				InventoryClass = class<Inventory>(DynamicLoadObject(WeaponsToReplace[j].NewClassPath, class'Class'));
 			}
 
 			if (WeaponsToReplace[j].OldClassName != '' && !WeaponsToReplace[j].Options.bNoReplaceWeapon && !WeaponsToReplace[j].Options.bNoDefaultInventory)
@@ -268,28 +268,28 @@ function InitMutator(string Options, out string ErrorMessage)
 					// IsA doesn't work for abstract classes, we need to use the workaround/hackfix
 					if (WeaponsToReplace[j].Options.bSubClasses && !IsSubClass(G.DefaultInventory[i], WeaponsToReplace[j].OldClassName)) continue;
 
-					if (WeaponClass == none)
+					if (InventoryClass == none)
 					{
 						// remove from inventory
 						G.DefaultInventory.Remove(i, 1);
 					}
 					else if (!WeaponsToReplace[j].Options.bNoReplaceWeapon)
 					{
-						G.DefaultInventory[i] = WeaponClass;
+						G.DefaultInventory[i] = InventoryClass;
 					}
 				}
 			}
 
 			// add to default inventory by request
-			if (WeaponsToReplace[j].Options.bAddToDefault && WeaponClass != none)
+			if (WeaponsToReplace[j].Options.bAddToDefault && InventoryClass != none)
 			{
-				G.DefaultInventory.AddItem(WeaponClass);
+				G.DefaultInventory.AddItem(InventoryClass);
 			}
 
 			// add to weapon lockers by request
 			if (WeaponsToReplace[j].Options.bAddToLocker)
 			{
-				AddToLocker(WeaponClass, WeaponsToReplace[j].Options.LockerOptions);
+				AddToLocker(class<UTWeapon>(InventoryClass), WeaponsToReplace[j].Options.LockerOptions);
 			}
 		}
 
@@ -298,14 +298,14 @@ function InitMutator(string Options, out string ErrorMessage)
 			j = WeaponsToReplace.Find('OldClassName', G.TranslocatorClass.Name);
 			if (j != INDEX_NONE)
 			{
-				if (WeaponClass == none || WeaponsToReplace[j].Options.bNoReplaceWeapon)
+				if (InventoryClass == none || WeaponsToReplace[j].Options.bNoReplaceWeapon)
 				{
 					// replace with nothing
 					G.TranslocatorClass = None;
 				}
 				else
 				{
-					G.TranslocatorClass = WeaponClass;
+					G.TranslocatorClass = InventoryClass;
 				}
 			}
 		}
@@ -330,14 +330,12 @@ function bool CheckReplacement(Actor Other)
 	local UTAmmoPickupFactory AmmoPickup, NewAmmo;
 	local class<UTAmmoPickupFactory> NewAmmoClass;
 	local UTHealthPickupFactory HealthPickup;
-	local class<UTHealthPickupFactory> NewHealthPickupClass;
 	local UTArmorPickupFactory ArmorPickup;
-	local class<UTArmorPickupFactory> NewArmorPickupClass;
 	local UTPowerupPickupFactory PowerupPickup;
-	local class<UTPowerupPickupFactory> NewPowerupPickupClass;
 	local UTDeployablePickupFactory DeployablePickup;
-	local class<UTDeployablePickupFactory> NewDeployablePickupClass;
 	local int i, Index;
+	local class NewClass;
+	local byte bAbort;
 
 	WeaponPickup = UTWeaponPickupFactory(Other);
 	if (WeaponPickup != None)
@@ -346,13 +344,21 @@ function bool CheckReplacement(Actor Other)
 		{
 			if (ShouldBeReplaced(index, WeaponPickup.WeaponPickupClass, RT_Weapon) && !WeaponsToReplace[index].Options.bNoReplaceWeapon)
 			{
-				if (WeaponsToReplace[index].NewClassPath == "")
+				if (WeaponsToReplace[index].NewClassPath == "" || !LoadClass(WeaponsToReplace[index].NewClassPath, NewClass))
 				{
 					// replace with nothing
 					return false;
 				}
-				WeaponPickup.WeaponPickupClass = class<UTWeapon>(DynamicLoadObject(WeaponsToReplace[index].NewClassPath, class'Class'));
-				WeaponPickup.InitializePickup();
+
+				if (class<Inventory>(NewClass) != none)
+				{
+					WeaponPickup.WeaponPickupClass = class<UTWeapon>(NewClass);
+					WeaponPickup.InitializePickup();
+				}
+				else if (SpawnNewPickup(WeaponPickup, class<Actor>(NewClass), bAbort) && bAbort != 0)
+				{
+					return false;
+				}
 			}
 		}
 	}
@@ -437,16 +443,8 @@ function bool CheckReplacement(Actor Other)
 		HealthPickup = UTHealthPickupFactory(Other);
 		if (ShouldBeReplaced(index, HealthPickup.Class, RT_Health))
 		{
-			if (ClassPathValid(HealthToReplace[index].NewClassPath))
-			{
-				NewHealthPickupClass = class<UTHealthPickupFactory>(DynamicLoadObject(HealthToReplace[index].NewClassPath, class'Class'));
-				if (NewHealthPickupClass != none && Other.Class != NewHealthPickupClass)
-				{
-					SpawnStaticActor(NewHealthPickupClass, WorldInfo, Other.Owner,, Other.Location, Other.Rotation);
-					return false;
-				}
-			}
-			else
+			if (!ClassPathValid(HealthToReplace[index].NewClassPath) || !LoadClass(HealthToReplace[index].NewClassPath, NewClass) || 
+				(Other.Class != NewClass && SpawnNewPickup(Other, class<Actor>(NewClass), bAbort) && bAbort != 0))
 			{
 				return false;
 			}
@@ -458,16 +456,8 @@ function bool CheckReplacement(Actor Other)
 		ArmorPickup = UTArmorPickupFactory(Other);
 		if (ShouldBeReplaced(index, ArmorPickup.Class, RT_Armor))
 		{
-			if (ClassPathValid(ArmorToReplace[index].NewClassPath))
-			{
-				NewArmorPickupClass = class<UTArmorPickupFactory>(DynamicLoadObject(ArmorToReplace[index].NewClassPath, class'Class'));
-				if (NewArmorPickupClass != none && Other.Class != NewArmorPickupClass)
-				{
-					SpawnStaticActor(NewArmorPickupClass, WorldInfo, Other.Owner,, Other.Location, Other.Rotation);
-					return false;
-				}
-			}
-			else
+			if (!ClassPathValid(ArmorToReplace[index].NewClassPath) || !LoadClass(ArmorToReplace[index].NewClassPath, NewClass) || 
+				(Other.Class != NewClass && SpawnNewPickup(Other, class<Actor>(NewClass), bAbort) && bAbort != 0))
 			{
 				return false;
 			}
@@ -479,16 +469,8 @@ function bool CheckReplacement(Actor Other)
 		PowerupPickup = UTPowerupPickupFactory(Other);
 		if (ShouldBeReplaced(index, PowerupPickup.Class, RT_Powerup))
 		{
-			if (ClassPathValid(PowerupsToReplace[index].NewClassPath))
-			{
-				NewPowerupPickupClass = class<UTPowerupPickupFactory>(DynamicLoadObject(PowerupsToReplace[index].NewClassPath, class'Class'));
-				if (NewPowerupPickupClass != none && Other.Class != NewPowerupPickupClass)
-				{
-					SpawnStaticActor(NewPowerupPickupClass, WorldInfo, Other.Owner,, Other.Location, Other.Rotation);
-					return false;
-				}
-			}
-			else
+			if (!ClassPathValid(PowerupsToReplace[index].NewClassPath) || !LoadClass(PowerupsToReplace[index].NewClassPath, NewClass) || 
+				(Other.Class != NewClass && SpawnNewPickup(Other, class<Actor>(NewClass), bAbort) && bAbort != 0))
 			{
 				return false;
 			}
@@ -519,13 +501,21 @@ function bool CheckReplacement(Actor Other)
 		{
 			if (ShouldBeReplaced(index, DeployablePickup.DeployablePickupClass, RT_Deployable) && !DeployablesToReplace[index].Options.bNoReplaceWeapon)
 			{
-				if (DeployablesToReplace[index].NewClassPath == "")
+				if (DeployablesToReplace[index].NewClassPath == "" || !LoadClass(DeployablesToReplace[index].NewClassPath, NewClass))
 				{
 					// replace with nothing
 					return false;
 				}
-				DeployablePickup.DeployablePickupClass = class<UTDeployable>(DynamicLoadObject(DeployablesToReplace[index].NewClassPath, class'Class'));
-				DeployablePickup.InitializePickup();
+
+				if (class<UTDeployable>(NewClass) != none)
+				{
+					DeployablePickup.DeployablePickupClass = class<UTDeployable>(NewClass);
+					DeployablePickup.InitializePickup();
+				}
+				else if (SpawnNewPickup(DeployablePickup, class<Actor>(NewClass), bAbort) && bAbort != 0)
+				{
+					return false;
+				}
 			}
 		}
 
@@ -1309,9 +1299,25 @@ private static function bool GetStaticMutator(out TestCentralWeaponReplacement O
 	return OutMutator != none;
 }
 
+static function bool LoadClass(string ClassPath, out Class OutClass)
+{
+	OutClass = class(DynamicLoadObject(ClassPath, class'Class'));
+	return OutClass != none;
+}
+
+static function bool SpawnNewPickup(Actor Other, class<Actor> ActorClass, out byte OutAbort)
+{
+	if (ActorClass == none)
+		return false;
+
+	OutAbort = 1;
+	SpawnStaticActor(ActorClass, Other.WorldInfo, Other.Owner,, Other.Location, Other.Rotation);
+	return true;
+}
+
 static function bool SpawnStaticActor(
 	class<Actor> ActorClass, 
-	optional WorldInfo  WorldInfo,
+	optional WorldInfo  WI,
 	optional actor	    SpawnOwner,
 	optional name       SpawnTag,
 	optional vector     SpawnLocation,
@@ -1321,8 +1327,8 @@ static function bool SpawnStaticActor(
 	local Actor NewActor;
 	local bool DefaultbStatic, DefaultbNoDelete;
 
-	if (WorldInfo == none)
-		WorldInfo = class'Engine'.static.GetCurrentWorldInfo();
+	if (WI == none)
+		WI = class'Engine'.static.GetCurrentWorldInfo();
 
 	DefaultbStatic = ActorClass.default.bStatic;
 	DefaultbNoDelete = ActorClass.default.bNoDelete;
@@ -1330,7 +1336,7 @@ static function bool SpawnStaticActor(
 	class'TestCWRHelper'.static.SetActorStatic(ActorClass, false);
 	class'TestCWRHelper'.static.SetActorNoDelete(ActorClass, false);
 
-	NewActor = WorldInfo.Spawn(ActorClass, SpawnOwner, SpawnTag, SpawnLocation, SpawnRotation, ActorTemplate, true);
+	NewActor = WI.Spawn(ActorClass, SpawnOwner, SpawnTag, SpawnLocation, SpawnRotation, ActorTemplate, true);
 					
 	class'TestCWRHelper'.static.SetActorStatic(ActorClass, DefaultbStatic);
 	class'TestCWRHelper'.static.SetActorNoDelete(ActorClass, DefaultbNoDelete);
