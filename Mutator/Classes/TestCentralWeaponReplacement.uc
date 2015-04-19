@@ -47,6 +47,24 @@ struct ReplacementLockerInfo
 	var array<name> Tags;
 };
 
+struct ReplacementSpawnInfo
+{
+	var bool OverrideLocation;
+	var Vector Location;
+	var Vector OffsetLocation;	
+
+	var bool OverrideRotation;
+	var Rotator Rotation;
+	var Rotator OffsetRotation;
+
+	//var bool OverrideScale;
+	//var bool ApplyScale;
+	//var float Scale;
+	//var Vector Scale3D;	
+	//var float OffsetScale;
+	//var Vector OffsetScale3D;
+};
+
 struct ReplacementOptionsInfo
 {
 	/** Whether to not replace/remove the weapon */
@@ -65,6 +83,9 @@ struct ReplacementOptionsInfo
 	var bool bAddToLocker;
 	/** Options to specify to which Locker the weapon should be added */
 	var ReplacementLockerInfo LockerOptions;
+
+	/** Options to specify additional spawning information about translation/rotation/scale etc. when a pickup/vehicle factory is replaced */
+	var ReplacementSpawnInfo SpawnOptions;
 	
 	// struct defaultproperties doesn't work for template mutators default props
 	// Note: Don't change anything to a different value than the default one
@@ -377,7 +398,7 @@ function bool CheckReplacement(Actor Other)
 					WeaponPickup.WeaponPickupClass = class<UTWeapon>(NewClass);
 					WeaponPickup.InitializePickup();
 				}
-				else if (SpawnNewPickup(WeaponPickup, class<Actor>(NewClass), bAbort) && bAbort != 0)
+				else if (SpawnNewPickup(WeaponPickup, class<Actor>(NewClass), WeaponsToReplace[index].Options.SpawnOptions, bAbort) && bAbort != 0)
 				{
 					return false;
 				}
@@ -466,7 +487,7 @@ function bool CheckReplacement(Actor Other)
 		if (ShouldBeReplaced(index, HealthPickup.Class, RT_Health))
 		{
 			if (!ClassPathValid(HealthToReplace[index].NewClassPath) || !LoadClass(HealthToReplace[index].NewClassPath, NewClass) || 
-				(Other.Class != NewClass && SpawnNewPickup(Other, class<Actor>(NewClass), bAbort) && bAbort != 0))
+				(Other.Class != NewClass && SpawnNewPickup(Other, class<Actor>(NewClass), HealthToReplace[index].Options.SpawnOptions, bAbort) && bAbort != 0))
 			{
 				return false;
 			}
@@ -479,7 +500,7 @@ function bool CheckReplacement(Actor Other)
 		if (ShouldBeReplaced(index, ArmorPickup.Class, RT_Armor))
 		{
 			if (!ClassPathValid(ArmorToReplace[index].NewClassPath) || !LoadClass(ArmorToReplace[index].NewClassPath, NewClass) || 
-				(Other.Class != NewClass && SpawnNewPickup(Other, class<Actor>(NewClass), bAbort) && bAbort != 0))
+				(Other.Class != NewClass && SpawnNewPickup(Other, class<Actor>(NewClass), ArmorToReplace[index].Options.SpawnOptions, bAbort) && bAbort != 0))
 			{
 				return false;
 			}
@@ -492,7 +513,7 @@ function bool CheckReplacement(Actor Other)
 		if (ShouldBeReplaced(index, PowerupPickup.Class, RT_Powerup))
 		{
 			if (!ClassPathValid(PowerupsToReplace[index].NewClassPath) || !LoadClass(PowerupsToReplace[index].NewClassPath, NewClass) || 
-				(Other.Class != NewClass && SpawnNewPickup(Other, class<Actor>(NewClass), bAbort) && bAbort != 0))
+				(Other.Class != NewClass && SpawnNewPickup(Other, class<Actor>(NewClass), PowerupsToReplace[index].Options.SpawnOptions, bAbort) && bAbort != 0))
 			{
 				return false;
 			}
@@ -512,7 +533,7 @@ function bool CheckReplacement(Actor Other)
 				PowerupPickup.InventoryType = class<Inventory>(NewClass);
 				PowerupPickup.InitializePickup();
 			}
-			else if (SpawnNewPickup(PowerupPickup, class<Actor>(NewClass), bAbort) && bAbort != 0)
+			else if (SpawnNewPickup(PowerupPickup, class<Actor>(NewClass), PowerupsToReplace[index].Options.SpawnOptions, bAbort) && bAbort != 0)
 			{
 				return false;
 			}
@@ -535,7 +556,7 @@ function bool CheckReplacement(Actor Other)
 				DeployablePickup.DeployablePickupClass = class<UTDeployable>(NewClass);
 				DeployablePickup.InitializePickup();
 			}
-			else if (SpawnNewPickup(DeployablePickup, class<Actor>(NewClass), bAbort) && bAbort != 0)
+			else if (SpawnNewPickup(DeployablePickup, class<Actor>(NewClass), DeployablesToReplace[index].Options.SpawnOptions, bAbort) && bAbort != 0)
 			{
 				return false;
 			}
@@ -545,7 +566,7 @@ function bool CheckReplacement(Actor Other)
 		else if (ShouldBeReplaced(index, DeployablePickup.Class, RT_Deployable))
 		{
 			if (!ClassPathValid(DeployablesToReplace[index].NewClassPath) || !LoadClass(DeployablesToReplace[index].NewClassPath, NewClass) || 
-				(Other.Class != NewClass && SpawnNewPickup(Other, class<Actor>(NewClass), bAbort) && bAbort != 0))
+				(Other.Class != NewClass && SpawnNewPickup(Other, class<Actor>(NewClass), DeployablesToReplace[index].Options.SpawnOptions, bAbort) && bAbort != 0))
 			{
 				return false;
 			}
@@ -558,7 +579,7 @@ function bool CheckReplacement(Actor Other)
 		if (ShouldBeReplaced(index, VehicleFac.Class, RT_Vehicle))
 		{
 			if (!ClassPathValid(VehiclesToReplace[index].NewClassPath) || !LoadClass(VehiclesToReplace[index].NewClassPath, NewClass) || 
-				(Other.Class != NewClass && SpawnNewPickup(Other, class<Actor>(NewClass), bAbort) && bAbort != 0))
+				(Other.Class != NewClass && SpawnNewPickup(Other, class<Actor>(NewClass), VehiclesToReplace[index].Options.SpawnOptions, bAbort) && bAbort != 0))
 			{
 				return false;
 			}
@@ -570,15 +591,22 @@ function bool CheckReplacement(Actor Other)
 			if (!ClassPathValid(VehiclesToReplace[index].NewClassPath) || !LoadClass(VehiclesToReplace[index].NewClassPath, NewClass))
 			{
 				// replace with nothing
+				VehicleFac.VehicleClassPath = "";
+				VehicleFac.VehicleClass = none;
+				VehicleFac.Deactivate();
 				return false;
 			}
 
 			if (class<UTVehicle>(NewClass) != none)
 			{
+				VehicleFac.VehicleClassPath = PathName(NewClass);
 				VehicleFac.VehicleClass = class<UTVehicle>(NewClass);
 			}
-			else if (SpawnNewPickup(VehicleFac, class<Actor>(NewClass), bAbort) && bAbort != 0)
+			else if (SpawnNewPickup(VehicleFac, class<Actor>(NewClass), VehiclesToReplace[index].Options.SpawnOptions, bAbort) && bAbort != 0)
 			{
+				VehicleFac.VehicleClassPath = "";
+				VehicleFac.VehicleClass = none;
+				VehicleFac.Deactivate();
 				return false;
 			}
 		}
@@ -590,7 +618,7 @@ function bool CheckReplacement(Actor Other)
 		if (ShouldBeReplaced(index, PickupFac.Class, RT_Custom))
 		{
 			if (!ClassPathValid(CustomsToReplace[index].NewClassPath) || !LoadClass(CustomsToReplace[index].NewClassPath, NewClass) || 
-				(Other.Class != NewClass && SpawnNewPickup(Other, class<Actor>(NewClass), bAbort) && bAbort != 0))
+				(Other.Class != NewClass && SpawnNewPickup(Other, class<Actor>(NewClass), CustomsToReplace[index].Options.SpawnOptions, bAbort) && bAbort != 0))
 			{
 				return false;
 			}
@@ -610,7 +638,7 @@ function bool CheckReplacement(Actor Other)
 				PickupFac.InventoryType = class<Inventory>(NewClass);
 				PickupFac.InitializePickup();
 			}
-			else if (SpawnNewPickup(PickupFac, class<Actor>(NewClass), bAbort) && bAbort != 0)
+			else if (SpawnNewPickup(PickupFac, class<Actor>(NewClass), CustomsToReplace[index].Options.SpawnOptions, bAbort) && bAbort != 0)
 			{
 				return false;
 			}
@@ -1216,6 +1244,40 @@ function bool ShouldBeReplacedLocker(UTWeaponLocker Locker, ReplacementLockerInf
 		LockerOptions.Tags.Find(Locker.Group) != INDEX_NONE;
 }
 
+function bool SpawnNewPickup(Actor Other, class<Actor> ActorClass, ReplacementSpawnInfo SpawnOptions, out byte OutAbort, optional out Actor NewActor)
+{
+	local vector SpawnLocation;
+	local rotator SpawnRotation;
+	//local float SpawnScale;
+	//local vector SpawnScale3D;
+
+	if (ActorClass == none)
+		return false;
+
+	OutAbort = 1;
+
+	SpawnLocation = SpawnOptions.OverrideLocation ? SpawnOptions.Location : Other.Location;
+	SpawnRotation = SpawnOptions.OverrideRotation ? SpawnOptions.Rotation : Other.Rotation;
+	//SpawnScale = SpawnOptions.OverrideScale ? SpawnOptions.Scale : Other.DrawScale;
+	//SpawnScale3D = SpawnOptions.OverrideScale ? SpawnOptions.Scale3D : Other.DrawScale3D;
+
+	SpawnLocation += SpawnOptions.OffsetLocation;
+	SpawnRotation += SpawnOptions.OffsetRotation;
+	//SpawnScale += SpawnOptions.OffsetScale;
+	//SpawnScale3D += SpawnOptions.OffsetScale3D;
+
+	SpawnStaticActor(ActorClass, Other.WorldInfo, Other.Owner,, SpawnLocation, SpawnRotation,, NewActor);
+	//if (NewActor != none)
+	//{
+	//	if (SpawnOptions.ApplyScale)
+	//	{
+	//		NewActor.SetDrawScale(SpawnScale);
+	//		NewActor.SetDrawScale3D(SpawnScale3D);
+	//	}
+	//}
+	return true;
+}
+
 //**********************************************************************************
 // Helper functions
 //**********************************************************************************
@@ -1323,16 +1385,6 @@ static function bool LoadClass(string ClassPath, out Class OutClass)
 	return OutClass != none;
 }
 
-static function bool SpawnNewPickup(Actor Other, class<Actor> ActorClass, out byte OutAbort)
-{
-	if (ActorClass == none)
-		return false;
-
-	OutAbort = 1;
-	SpawnStaticActor(ActorClass, Other.WorldInfo, Other.Owner,, Other.Location, Other.Rotation);
-	return true;
-}
-
 static function bool SpawnStaticActor(
 	class<Actor> ActorClass, 
 	optional WorldInfo  WI,
@@ -1340,9 +1392,9 @@ static function bool SpawnStaticActor(
 	optional name       SpawnTag,
 	optional vector     SpawnLocation,
 	optional rotator    SpawnRotation,
-	optional Actor      ActorTemplate)
+	optional Actor      ActorTemplate,
+	optional out Actor  NewActor)
 {
-	local Actor NewActor;
 	local bool DefaultbStatic, DefaultbNoDelete;
 
 	if (WI == none)
