@@ -136,10 +136,10 @@ function BuildPickupOptions()
 			// fix to have the package UTGameContent loaded
 			DynamicLoadObject("UTGameContent.UTDeployableEMPMine", class'class');
 			DynamicLoadObject("UTGameContent.UTDeployableEnergyShield", class'class');
-			DynamicLoadObject("UTGameContent.UTDeployableLinkGenerator", class'class');
 			DynamicLoadObject("UTGameContent.UTDeployableShapedCharge", class'class');
 			DynamicLoadObject("UTGameContent.UTDeployableSlowVolume", class'class');
 			DynamicLoadObject("UTGameContent.UTDeployableSpiderMineTrap", class'class');
+			DynamicLoadObject("UT3Gold.UTDeployableLinkGenerator", class'class');
 			DynamicLoadObject("UT3Gold.UTDeployableXRayVolume", class'class');
 
 			str = UIController.Outer.ConsoleCommand("obj classes");
