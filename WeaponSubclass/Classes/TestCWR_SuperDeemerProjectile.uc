@@ -19,13 +19,13 @@ Begin:
 
 DefaultProperties
 {
-	Begin Object Class=MaterialInstanceConstant Name=MyMaterialInstanceAttachment
+	Begin Object Class=MaterialInstanceConstant Name=MyMaterialInstanceProjectile
 		Parent=MaterialInterface'Engine_MI_Shaders.Instances.M_ES_Phong_Opaque_INST_01'
 		VectorParameterValues.Add((ParameterName="Diffuse_01_Color",ParameterValue=(R=1.0,G=0.0,B=0.0,A=1.0)))
 	End Object
 
 	Begin Object Name=ProjectileMesh
-		Materials(0)=MyMaterialInstanceAttachment
+		Materials(0)=MyMaterialInstanceProjectile
 		CullDistance=20000
 		Scale=2.0
 	End Object
