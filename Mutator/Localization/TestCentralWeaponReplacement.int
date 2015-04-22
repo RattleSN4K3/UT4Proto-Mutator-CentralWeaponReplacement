@@ -15,3 +15,25 @@ MessageClassRemovedDefault=`old is already removed by the default configuration.
 [TestCWRUIFrontend]
 ErrorMessage=Unable to add `mutator.    `error`query
 ErrorQuery="    Do you want to continue enabling the mutator?"
+
+[TestCWRUIConfig]
+Title="[Central Weapon Replacement]"
+PreLoadingMessage="Pre-loading classes. May take up to 30s"
+;
+; Keep Tag non-localized and only translate the Text field into the specific language
+TitlesMapping[0]=(Tag="Weapons",Text="Weapons")
+TitlesMapping[1]=(Tag="Healths",Text="Health")
+TitlesMapping[2]=(Tag="Armors",Text="Armor")
+TitlesMapping[3]=(Tag="Powerups",Text="Powerups")
+TitlesMapping[4]=(Tag="Deployables",Text="Deployables")
+TitlesMapping[5]=(Tag="Vehicles",Text="Vehicles")
+TitlesMapping[6]=(Tag="Customs",Text="Customs")
+
+[Titles]
+Weapons=Weapons
+Healths=Health
+Armors=Armor
+Powerups=Powerups
+Deployables=Deployables
+Vehicles=Vehicles
+Customs=Customs
