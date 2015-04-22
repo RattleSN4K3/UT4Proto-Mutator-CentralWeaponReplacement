@@ -1111,6 +1111,41 @@ static private function int StaticPreGetInsertIndex(out array<ReplacementInfoEx>
 	return INDEX_NONE;
 }
 
+static function bool GetConfigReplacements(EReplacementType ReplacementType, out array<ReplacementInfoEx> Replacements)
+{
+	switch (ReplacementType) {
+	case RT_Weapon: Replacements = default.DefaultWeaponsToReplace;break;
+	case RT_Ammo: Replacements = default.DefaultAmmoToReplace;break;
+
+	case RT_Health: Replacements = default.DefaultHealthToReplace;break;
+	case RT_Armor: Replacements = default.DefaultArmorToReplace;break;
+	case RT_Powerup: Replacements = default.DefaultPowerupsToReplace;break;
+	case RT_Deployable: Replacements = default.DefaultDeployablesToReplace;break;
+	case RT_Vehicle: Replacements = default.DefaultVehiclesToReplace;break;
+	case RT_Custom: Replacements = default.DefaultCustomsToReplace;break;
+	default: return false;
+	}
+
+	return true;
+}
+
+static function bool SetConfigReplacements(EReplacementType ReplacementType, out array<ReplacementInfoEx> Replacements)
+{
+	if (ReplacementType == RT_Weapon) default.DefaultWeaponsToReplace = Replacements;
+	else if (ReplacementType == RT_Ammo) default.DefaultAmmoToReplace = Replacements;
+
+	else if (ReplacementType == RT_Health) default.DefaultHealthToReplace = Replacements;
+	else if (ReplacementType == RT_Armor) default.DefaultArmorToReplace = Replacements;
+	else if (ReplacementType == RT_Powerup) default.DefaultPowerupsToReplace = Replacements;
+	else if (ReplacementType == RT_Deployable) default.DefaultDeployablesToReplace = Replacements;
+	else if (ReplacementType == RT_Vehicle) default.DefaultVehiclesToReplace = Replacements;
+	else if (ReplacementType == RT_Custom) default.DefaultCustomsToReplace = Replacements;
+	else return false;
+
+	StaticSaveConfig();
+	return true;
+}
+
 //**********************************************************************************
 // Private functions
 //**********************************************************************************
