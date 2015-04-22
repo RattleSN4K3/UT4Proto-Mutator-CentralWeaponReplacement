@@ -38,11 +38,36 @@ struct HashedAmmoInfo
 	var string Text;
 };
 
+struct SublistInfo
+{
+	var name Name;
+	var name FieldName;
+	var string MarkupString;
+};
+
+struct DataListMapInfo
+{
+	var name ListName;
+	var name BaseClassName;
+	var string BasePrefix;
+
+	var array<string> PreLoad;
+
+	// Runtime
+	var transient array<SublistInfo> SubLists;
+};
+
 //**********************************************************************************
 // Variables
 //**********************************************************************************
 
 var bool bInitialized;
+var bool bAllLoaded;
+
+var UTUIDataStore_StringList StringDataStore;
+
+var() array<DataListMapInfo> DataLists;
+var() array<DataListMapInfo> CachedDataLists;
 
 // Hashed Data
 var array<HashedMutatorInfo> HashedMutators;
@@ -97,6 +122,58 @@ function Kill()
 	HashedWeapons.Length = 0;
 	HashedAmmos.Length = 0;
 	bInitialized = false;
+}
+
+public function bool LoadAll()
+{
+	local DataStoreClient DSC;
+	local string dump;
+	local array<string> Classes;
+	local int i;
+	local array<SublistInfo> SubLists;
+
+	if (bAllLoaded && CachedDataLists.Length == DataLists.Length)
+		return true;
+
+	DSC = class'UIInteraction'.static.GetDataStoreClient();
+	if ( DSC == None )
+		return false;
+
+	StringDataStore = UTUIDataStore_StringList(DSC.FindDataStore(class'UTUIDataStore_StringList'.default.Tag));
+	if ( StringDataStore == None )
+	{
+		StringDataStore = DSC.CreateDataStore(class'UTUIDataStore_StringList');
+		DSC.RegisterDataStore(StringDataStore);
+	}
+
+	if ( StringDataStore == None )
+		return false;
+
+	CachedDataLists = DataLists;
+	for (i=0; i<CachedDataLists.Length; i++)
+	{
+		PreLoadClasses(CachedDataLists[i].PreLoad);
+	}
+
+	//@TODO: activate loading all classes/types
+
+	//if (!GetClassesDump(dump))
+	//	return false;
+
+	//ParseStringIntoArray(dump, Classes, Chr(10), true);
+	//for (i=0; i<CachedDataLists.Length; i++)
+	//{
+	//	markups.Length = 0;
+	//	if (InternalLoadList(SubLists, Classes, CachedDataLists[i].ListName, CachedDataLists[i].BaseClassName, CachedDataLists[i].BasePrefix))
+	//	{
+	//		CachedDataLists[i].SubLists = SubLists;
+	//	}
+	//}
+
+	InternalLoadWeapons();
+	
+	bAllLoaded = true;
+	return true;
 }
 
 private function LoadMutators()
@@ -391,6 +468,224 @@ static function bool GetFriendlyNameOfPickupClass(class cls, out string out_prop
 }
 
 //**********************************************************************************
+// Data Lists functions
+//**********************************************************************************
+
+public function bool GetMarkup(name ListName, name SubListName, out string OutMarkup)
+{
+	local int i, j;
+	i = CachedDataLists.Find('ListName', ListName);
+	if (i != INDEX_NONE)
+	{
+		j = CachedDataLists[i].SubLists.Find('Name', SubListName);
+		if (j != INDEX_NONE)
+		{
+			OutMarkup = CachedDataLists[i].SubLists[j].MarkupString;
+			return true;
+		}
+	}
+
+	return false;
+}
+
+public function bool GetDataStoreValue(name ListName, name FieldName, int StrIndex, out string OutStr)
+{
+	local int i, j;
+	local name n;
+	i = CachedDataLists.Find('ListName', ListName);
+	if (i != INDEX_NONE)
+	{
+		j = CachedDataLists[i].SubLists.Find('Name', FieldName);
+		if (j != INDEX_NONE)
+		{
+			n = CachedDataLists[i].SubLists[j].FieldName;
+			OutStr = StringDataStore.GetStr(n, StrIndex);
+			return true;
+		}
+	}
+
+	return false;
+}
+
+public function bool GetDataStoreIndex(name ListName, name FieldName, coerce string Str, out int OutIndex)
+{
+	local int i, j;
+	local name n;
+	i = CachedDataLists.Find('ListName', ListName);
+	if (i != INDEX_NONE)
+	{
+		j = CachedDataLists[i].SubLists.Find('Name', FieldName);
+		if (j != INDEX_NONE)
+		{
+			n = CachedDataLists[i].SubLists[j].FieldName;
+			OutIndex = StringDataStore.FindStr(n, Str);
+			return true;
+		}
+	}
+
+	return false;
+}
+
+private function PreLoadClasses(array<string> PreLoadClasses)
+{
+	local int i;
+	for (i=0; i<PreLoadClasses.Length; i++)
+	{
+		DynamicLoadObject(PreLoadClasses[i], class'class');
+	}
+}
+
+private function InternalLoadWeapons()
+{
+	local int i;
+	local name ListName;
+	local name ListNameClasses;
+	local name ListNamePaths;
+	local string FriendlyName;
+	local array<SublistInfo> SubLists;
+
+	ListName = 'WeaponSelection';
+	ListNameClasses = name(ListName$"_Class");
+	ListNamePaths = name(ListName$"_Path");
+
+	if (StringDataStore.GetFieldIndex('WeaponSelection') == INDEX_None)
+	{
+		StringDataStore.Empty(ListName, true);
+		StringDataStore.Empty(ListNameClasses, true);
+		StringDataStore.Empty(ListNamePaths, true);
+
+		// add none entry
+		StringDataStore.AddStr(ListName, "", true);
+		StringDataStore.AddStr(ListNameClasses, "", true);
+		StringDataStore.AddStr(ListNamePaths, "", true);
+
+		for (i=0; i<HashedWeapons.Length; i++)
+		{
+			FriendlyName = HashedWeapons[i].Info.FriendlyName;
+			FriendlyName = class'UTUIScene'.static.TrimWhitespace(FriendlyName);
+			if (FriendlyName == "") FriendlyName = ""$HashedWeapons[i].ClassName;
+			StringDataStore.AddStr(ListName, FriendlyName, true);
+			StringDataStore.AddStr(ListNameClasses, ""$HashedWeapons[i].ClassName, true);
+			StringDataStore.AddStr(ListNamePaths, ""$HashedWeapons[i].Info.ClassName, true);
+		}
+	}
+
+	i = SubLists.Length;
+	SubLists.Add(1);
+	SubLists[i].Name = '';
+	SubLists[i].FieldName = ListName;
+	SubLists[i].MarkupString = "<"$StringDataStore.tag$":"$ListName$">";
+	
+	i = SubLists.Length;
+	SubLists.Add(1);
+	SubLists[i].FieldName = ListNameClasses;
+	SubLists[i].Name = 'Class';
+	SubLists[i].MarkupString = "<"$StringDataStore.tag$":"$ListNameClasses$">";
+
+	i = SubLists.Length;
+	SubLists.Add(1);
+	SubLists[i].FieldName = ListNamePaths;
+	SubLists[i].Name = 'Path';
+	SubLists[i].MarkupString = "<"$StringDataStore.tag$":"$ListNamePaths$">";
+
+	i = CachedDataLists.Length;
+	CachedDataLists.Add(1);
+	CachedDataLists[i].ListName = 'WeaponSelection';
+	CachedDataLists[i].SubLists = SubLists;
+}
+
+private function bool InternalLoadList(out array<SublistInfo> OutSubLists, out array<string> ClassDump, name ListName, name ClassName, string Prefix)
+{
+	local int i, index;
+	local string findstr;
+	local string line, ClassStr;
+	local int PrefixCount, IndentCount;
+
+	local name ListNameClasses;
+	local name n;
+	local array<name> ClassNames;
+	local array<name> FriendlyNames;
+
+	ListNameClasses = name(ListName$"_Class");
+	if (StringDataStore.GetFieldIndex(ListName) == INDEX_None)
+	{
+		findstr = Prefix$ClassName;
+		index = ClassDump.Find(findstr);
+		if (index == INDEX_NONE)
+		{
+			findstr = string(ClassName);
+			for (i=0; i<ClassDump.Length; i++)
+			{
+				ClassStr = class'UTUIScene'.static.TrimWhitespace(ClassDump[i]);
+				if (ClassStr ~= findstr)
+				{
+					PrefixCount = Len(ClassDump[i])-Len(ClassStr);
+					index = i;
+					break;
+				}
+			}
+		}
+
+		line = class'UTUIScene'.static.TrimWhitespace(ClassDump[index]);
+		PrefixCount = Len(ClassDump[index])-Len(line);
+		for (i=index+1; i<ClassDump.Length; i++)
+		{
+			ClassStr = class'UTUIScene'.static.TrimWhitespace(ClassDump[i]);
+			IndentCount = Len(ClassDump[i])-Len(ClassStr);
+			if (PrefixCount >= IndentCount)
+			{
+				break;
+			}
+
+			n = name(ClassStr);
+			ClassNames.AddItem(n);
+		}
+
+		StringDataStore.Empty(ListName, true);
+		StringDataStore.Empty(ListNameClasses, true);
+
+		FriendlyNames.Length = ClassNames.Length+1;
+		
+		// add none entry
+		StringDataStore.AddStr(ListName, "", true);
+		StringDataStore.AddStr(ListNameClasses, "", true);
+
+		for(i=0; i<ClassNames.length; i++)
+		{
+			line = ""$ClassNames[i];
+			StringDataStore.AddStr(ListName, line, true);
+			StringDataStore.AddStr(ListNameClasses, ""$ClassNames[i], true);
+		}
+	}
+
+	i = OutSubLists.Length;
+	OutSubLists.Add(1);
+	OutSubLists[i].Name = '';
+	OutSubLists[i].FieldName = ListName;
+	OutSubLists[i].MarkupString = "<"$StringDataStore.tag$":"$ListName$">";
+	
+	i = OutSubLists.Length;
+	OutSubLists.Add(1);
+	OutSubLists[i].Name = 'Class';
+	OutSubLists[i].FieldName = ListNameClasses;
+	OutSubLists[i].MarkupString = "<"$StringDataStore.tag$":"$ListNameClasses$">";
+	return true;
+}
+
+private function bool GetClassesDump(out string OUtClassesDump)
+{
+	local UIInteraction UIController;
+	UIController = class'UIRoot'.static.GetCurrentUIController();
+	if (UIController != none && UIController.Outer != none)
+	{
+		OutClassesDump = UIController.Outer.ConsoleCommand("obj classes");
+		return true;
+	}
+
+	return false;
+}
+
+//**********************************************************************************
 // Static functions
 //**********************************************************************************
 
@@ -483,6 +778,56 @@ static function bool ClassPathValid(string classpath)
 
 DefaultProperties
 {
+	DataLists(0)={(ListName="PowerupSelection",BaseClassName="UTPowerupPickupFactory",BasePrefix="          ",
+		PreLoad=(
+			"UTGameContent.UTDeployableEMPMine",
+			"UTGameContent.UTDeployableEnergyShield",
+			"UTGameContent.UTDeployableShapedCharge",
+			"UTGameContent.UTDeployableSlowVolume",
+			"UTGameContent.UTDeployableSpiderMineTrap",
+			"UT3Gold.UTDeployableLinkGenerator",
+			"UT3Gold.UTDeployableXRayVolume"
+		))}
+	DataLists(1)={(ListName="DeployableSelection",BaseClassName="UTDeployable",BasePrefix="            ",
+		PreLoad=(
+			"UTGameContent.UTPickupFactory_UDamage",
+			"UTGameContent.UTPickupFactory_JumpBoots",
+			"UTGameContent.UTPickupFactory_Invulnerability",
+			"UTGameContent.UTPickupFactory_Invisibility",
+			"UTGameContent.UTPickupFactory_Berserk",
+			"UT3Gold.UTPickupFactory_SlowField"
+		))}
+	DataLists(2)={(ListName="HealthSelection",BaseClassName="UTHealthPickupFactory",BasePrefix="            ",
+		PreLoad=(
+			"UTGameContent.UTPickupFactory_SuperHealth"
+		))}
+	DataLists(3)={(ListName="ArmorSelection",BaseClassName="UTArmorPickupFactory",BasePrefix="            ",
+		PreLoad=(
+			"UTGameContent.UTArmorPickup_ShieldBelt"
+		))}
+	DataLists(4)={(ListName="VehicleSelection",BaseClassName="UTVehicleFactory",BasePrefix="      ",
+		PreLoad=(
+			"UTGameContent.UTVehicleFactory_Goliath",
+			"UTGameContent.UTVehicleFactory_Cicada",
+			"UTGameContent.UTVehicleFactory_DarkWalker",
+			"UTGameContent.UTVehicleFactory_Fury",
+			"UTGameContent.UTVehicleFactory_Goliath",
+			"UTGameContent.UTVehicleFactory_HellBender",
+			"UTGameContent.UTVehicleFactory_Leviathan",
+			"UTGameContent.UTVehicleFactory_Manta",
+			"UTGameContent.UTVehicleFactory_Nemesis",
+			"UTGameContent.UTVehicleFactory_NightShade",
+			"UTGameContent.UTVehicleFactory_Paladin",
+			"UTGameContent.UTVehicleFactory_Raptor",
+			"UTGameContent.UTVehicleFactory_Scavenger",
+			"UTGameContent.UTVehicleFactory_Scorpion",
+			"UTGameContent.UTVehicleFactory_SPMA",
+			"UTGameContent.UTVehicleFactory_Viper",
+			"UT3Gold.UTVehicleFactory_Eradicator",
+			"UT3Gold.UTVehicleFactory_StealthBenderGold"
+		))}
+
+
 	DialogNameColor="R=1.0,G=1.0,B=0.5,A=1.0"
 	DialogBadColor="R=1.0,G=0.5,B=0.5,A=1"
 	DialogGoodColor="R=0.1328125,G=0.69140625,B=0.296875,A=1"
