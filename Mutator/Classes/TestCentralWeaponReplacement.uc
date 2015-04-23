@@ -928,7 +928,6 @@ static function bool EnsureMutator(WorldInfo WI, out TestCentralWeaponReplacemen
 static function StaticPreInitialize()
 {
 	local TestCentralWeaponReplacement MutatorObj;
-	local int i;
 
 	default.StaticWeaponsToReplace.Length = 0;
 	default.StaticAmmoToReplace.Length = 0;
@@ -947,30 +946,6 @@ static function StaticPreInitialize()
 	{
 		MutatorObj.DataCache = class'TestCWRUI'.static.GetData();
 	}
-
-	for (i=0; i<default.DefaultWeaponsToReplace.Length; i++)
-		StaticRegisterWeaponReplacement(none, default.DefaultWeaponsToReplace[i].OldClassName, default.DefaultWeaponsToReplace[i].NewClassPath, RT_Weapon, default.DefaultWeaponsToReplace[i].Options, true);
-
-	for (i=0; i<default.DefaultAmmoToReplace.Length; i++)
-		StaticRegisterWeaponReplacement(none, default.DefaultAmmoToReplace[i].OldClassName, default.DefaultAmmoToReplace[i].NewClassPath, RT_Ammo, default.DefaultAmmoToReplace[i].Options, true);
-
-	for (i=0; i<default.StaticHealthToReplace.Length; i++)
-		StaticRegisterWeaponReplacement(none, default.StaticHealthToReplace[i].OldClassName, default.StaticHealthToReplace[i].NewClassPath, RT_Health, default.StaticHealthToReplace[i].Options, true);
-
-	for (i=0; i<default.StaticArmorToReplace.Length; i++)
-		StaticRegisterWeaponReplacement(none, default.StaticArmorToReplace[i].OldClassName, default.StaticArmorToReplace[i].NewClassPath, RT_Armor, default.StaticArmorToReplace[i].Options, true);
-
-	for (i=0; i<default.StaticPowerupsToReplace.Length; i++)
-		StaticRegisterWeaponReplacement(none, default.StaticPowerupsToReplace[i].OldClassName, default.StaticPowerupsToReplace[i].NewClassPath, RT_Powerup, default.StaticPowerupsToReplace[i].Options, true);
-
-	for (i=0; i<default.StaticDeployablesToReplace.Length; i++)
-		StaticRegisterWeaponReplacement(none, default.StaticDeployablesToReplace[i].OldClassName, default.StaticDeployablesToReplace[i].NewClassPath, RT_Deployable, default.StaticDeployablesToReplace[i].Options, true);
-
-	for (i=0; i<default.StaticVehiclesToReplace.Length; i++)
-		StaticRegisterWeaponReplacement(none, default.StaticVehiclesToReplace[i].OldClassName, default.StaticVehiclesToReplace[i].NewClassPath, RT_Vehicle, default.StaticVehiclesToReplace[i].Options, true);
-
-	for (i=0; i<default.StaticCustomsToReplace.Length; i++)
-		StaticRegisterWeaponReplacement(none, default.StaticCustomsToReplace[i].OldClassName, default.StaticCustomsToReplace[i].NewClassPath, RT_Custom, default.StaticCustomsToReplace[i].Options, true);
 }
 
 static function StaticPreDestroy()
@@ -1042,28 +1017,13 @@ static private function bool StaticPreRegisterWeaponReplacement(Object Registrar
 
 static private function bool StaticPreUnRegisterWeaponReplacement(Object Registrar, optional out string ErrorMessage)
 {
-	local bool bAnyRemoved;
-
 	if (Registrar == none)
 	{
 		ErrorMessage = "No Registrar.";
 		return false;
 	}
 
-	bAnyRemoved = RemoveReplacementFromArray(default.StaticWeaponsToReplace, Registrar) || bAnyRemoved;
-	bAnyRemoved = RemoveReplacementFromArray(default.StaticAmmoToReplace, Registrar) || bAnyRemoved;
-
-	bAnyRemoved = RemoveReplacementFromArray(default.StaticHealthToReplace, Registrar) || bAnyRemoved;
-	bAnyRemoved = RemoveReplacementFromArray(default.StaticArmorToReplace, Registrar) || bAnyRemoved;
-	bAnyRemoved = RemoveReplacementFromArray(default.StaticPowerupsToReplace, Registrar) || bAnyRemoved;
-	bAnyRemoved = RemoveReplacementFromArray(default.StaticDeployablesToReplace, Registrar) || bAnyRemoved;
-	bAnyRemoved = RemoveReplacementFromArray(default.StaticVehiclesToReplace, Registrar) || bAnyRemoved;
-	bAnyRemoved = RemoveReplacementFromArray(default.StaticCustomsToReplace, Registrar) || bAnyRemoved;
-
-	// remove order entry (skip otherwise to keep order for updating)
-	if (!default.StaticBatchOp) default.StaticOrder.RemoveItem(Registrar.Name);
-
-	return bAnyRemoved;
+	return InternalStaticUnRegisterWeaponReplacement(Registrar, ErrorMessage);
 }
 
 static private function StaticPreUpdateWeaponReplacement(Object Registrar, bool bBatchOp)
@@ -1076,7 +1036,9 @@ static private function int StaticPreGetInsertIndex(out array<ReplacementInfoEx>
 	local int i;
 	local name RegistrarName, PreName;
 	local bool bFound;
-	i = default.StaticOrder.Find(Registrar.Name);
+	
+	RegistrarName = Registrar != none ? Registrar.Name : '';
+	i = default.StaticOrder.Find(RegistrarName);
 	if (i == 0)
 	{
 		return 0;
@@ -1128,6 +1090,119 @@ static function bool SetConfigReplacements(EReplacementType ReplacementType, out
 
 	StaticSaveConfig();
 	return true;
+}
+
+//**********************************************************************************
+// UI related static interface functions
+//**********************************************************************************
+
+// For UI support to check for conflict (called by UI menu)
+static function string Localize( string SectionName, string KeyName, string PackageName )
+{
+	local string ErrorMessage;
+	if (KeyName == "" && PackageName == "")
+	{
+		if (SectionName ~= "IsConflicting")
+		{
+			return InternalStaticIsConflicting(ErrorMessage) ? "1"$Chr(10)$ErrorMessage : "0";
+		}
+		else if (SectionName ~= "PreAdd")
+		{
+			InternalStaticInitialize();
+			return "1";
+		}
+		else if (SectionName ~= "PreRemove")
+		{
+			InternalStaticDestroy();
+			return "1";
+		}
+		else if (SectionName ~= "PreUpdate")
+		{
+			InternalStaticUpdate();
+			return "1";
+		}
+	}
+
+	return super.Localize(SectionName, KeyName, PackageName);
+}
+
+static private function bool InternalStaticIsConflicting(optional out string ErrorMessage)
+{
+	return !InternalStaticInitialize(true, ErrorMessage);
+}
+
+static private function bool InternalStaticInitialize(optional bool bOnlyCheck, optional out string ErrorMessage )
+{
+	local int i;
+
+	for (i=0; i<default.DefaultWeaponsToReplace.Length; i++)
+		if (!StaticRegisterWeaponReplacement(none, default.DefaultWeaponsToReplace[i].OldClassName, default.DefaultWeaponsToReplace[i].NewClassPath, RT_Weapon, default.DefaultWeaponsToReplace[i].Options, true, bOnlyCheck, ErrorMessage))
+			if (bOnlyCheck) return false;
+
+	for (i=0; i<default.DefaultAmmoToReplace.Length; i++)
+		if (!StaticRegisterWeaponReplacement(none, default.DefaultAmmoToReplace[i].OldClassName, default.DefaultAmmoToReplace[i].NewClassPath, RT_Ammo, default.DefaultAmmoToReplace[i].Options, true, bOnlyCheck, ErrorMessage))
+			if (bOnlyCheck) return false;
+
+	for (i=0; i<default.StaticHealthToReplace.Length; i++)
+		if (!StaticRegisterWeaponReplacement(none, default.StaticHealthToReplace[i].OldClassName, default.StaticHealthToReplace[i].NewClassPath, RT_Health, default.StaticHealthToReplace[i].Options, true, bOnlyCheck, ErrorMessage))
+			if (bOnlyCheck) return false;
+
+	for (i=0; i<default.StaticArmorToReplace.Length; i++)
+		if (!StaticRegisterWeaponReplacement(none, default.StaticArmorToReplace[i].OldClassName, default.StaticArmorToReplace[i].NewClassPath, RT_Armor, default.StaticArmorToReplace[i].Options, true, bOnlyCheck, ErrorMessage))
+			if (bOnlyCheck) return false;
+
+	for (i=0; i<default.StaticPowerupsToReplace.Length; i++)
+		if (!StaticRegisterWeaponReplacement(none, default.StaticPowerupsToReplace[i].OldClassName, default.StaticPowerupsToReplace[i].NewClassPath, RT_Powerup, default.StaticPowerupsToReplace[i].Options, true, bOnlyCheck, ErrorMessage))
+			if (bOnlyCheck) return false;
+
+	for (i=0; i<default.StaticDeployablesToReplace.Length; i++)
+		if (!StaticRegisterWeaponReplacement(none, default.StaticDeployablesToReplace[i].OldClassName, default.StaticDeployablesToReplace[i].NewClassPath, RT_Deployable, default.StaticDeployablesToReplace[i].Options, true, bOnlyCheck, ErrorMessage))
+			if (bOnlyCheck) return false;
+
+	for (i=0; i<default.StaticVehiclesToReplace.Length; i++)
+		if (!StaticRegisterWeaponReplacement(none, default.StaticVehiclesToReplace[i].OldClassName, default.StaticVehiclesToReplace[i].NewClassPath, RT_Vehicle, default.StaticVehiclesToReplace[i].Options, true, bOnlyCheck, ErrorMessage))
+			if (bOnlyCheck) return false;
+
+	for (i=0; i<default.StaticCustomsToReplace.Length; i++)
+		if (StaticRegisterWeaponReplacement(none, default.StaticCustomsToReplace[i].OldClassName, default.StaticCustomsToReplace[i].NewClassPath, RT_Custom, default.StaticCustomsToReplace[i].Options, true, bOnlyCheck, ErrorMessage))
+			if (bOnlyCheck) return false;
+
+	return true;
+}
+
+static private function InternalStaticDestroy()
+{
+	InternalStaticUnRegisterWeaponReplacement(none);
+}
+
+static private function InternalStaticUpdate()
+{
+	StaticPreUpdateWeaponReplacement(none, true);
+	InternalStaticDestroy();
+	InternalStaticInitialize();
+	StaticPreUpdateWeaponReplacement(none, false);
+}
+
+static private function bool InternalStaticUnRegisterWeaponReplacement(Object Registrar, optional out string ErrorMessage)
+{
+	local bool bAnyRemoved;
+	local name RegistrarName;
+
+	bAnyRemoved = RemoveReplacementFromArray(default.StaticWeaponsToReplace, Registrar) || bAnyRemoved;
+	bAnyRemoved = RemoveReplacementFromArray(default.StaticAmmoToReplace, Registrar) || bAnyRemoved;
+
+	bAnyRemoved = RemoveReplacementFromArray(default.StaticHealthToReplace, Registrar) || bAnyRemoved;
+	bAnyRemoved = RemoveReplacementFromArray(default.StaticArmorToReplace, Registrar) || bAnyRemoved;
+	bAnyRemoved = RemoveReplacementFromArray(default.StaticPowerupsToReplace, Registrar) || bAnyRemoved;
+	bAnyRemoved = RemoveReplacementFromArray(default.StaticDeployablesToReplace, Registrar) || bAnyRemoved;
+	bAnyRemoved = RemoveReplacementFromArray(default.StaticVehiclesToReplace, Registrar) || bAnyRemoved;
+	bAnyRemoved = RemoveReplacementFromArray(default.StaticCustomsToReplace, Registrar) || bAnyRemoved;
+
+	// remove order entry (skip otherwise to keep order for updating)
+	RegistrarName = Registrar != none ? Registrar.Name : '';
+	if (!default.StaticBatchOp) default.StaticOrder.RemoveItem(RegistrarName);
+
+	return bAnyRemoved;
 }
 
 //**********************************************************************************
