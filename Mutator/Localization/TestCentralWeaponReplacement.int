@@ -18,7 +18,7 @@ ErrorQuery="    Do you want to continue enabling the mutator?"
 
 [TestCWRUIConfig]
 Title="[Central Weapon Replacement]"
-PreLoadingMessage="Pre-loading classes. May take up to 30s"
+BuildingUIMessage="Building UI. May take some seconds..."
 ;
 ; Keep Tag non-localized and only translate the Text field into the specific language
 TitlesMapping[0]=(Tag="Weapons",Text="Weapons")

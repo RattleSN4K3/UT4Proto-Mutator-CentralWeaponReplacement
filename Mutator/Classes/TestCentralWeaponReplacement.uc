@@ -3,22 +3,6 @@ class TestCentralWeaponReplacement extends UTMutator
 	config(TestCentralWeaponReplacement);
 
 //**********************************************************************************
-// Enums
-//**********************************************************************************
-
-enum EReplacementType
-{
-	RT_Weapon,
-	RT_Ammo,
-	RT_Health,
-	RT_Armor,
-	RT_Powerup,
-	RT_Deployable,
-	RT_Vehicle,
-	RT_Custom,
-};
-
-//**********************************************************************************
 // Structs
 //**********************************************************************************
 

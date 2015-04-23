@@ -1,6 +1,22 @@
 class TestCWRUI extends Object;
 
 //**********************************************************************************
+// Enums
+//**********************************************************************************
+
+enum EReplacementType
+{
+	RT_Weapon,
+	RT_Ammo,
+	RT_Health,
+	RT_Armor,
+	RT_Powerup,
+	RT_Deployable,
+	RT_Vehicle,
+	RT_Custom,
+};
+
+//**********************************************************************************
 // Constants
 //**********************************************************************************
 
@@ -48,13 +64,19 @@ struct SublistInfo
 struct DataListMapInfo
 {
 	var name ListName;
+	var EReplacementType Type;
 	var name BaseClassName;
 	var string BasePrefix;
 
-	var array<string> PreLoad;
-
 	// Runtime
 	var transient array<SublistInfo> SubLists;
+};
+
+struct KnownClassInfo
+{
+	var EReplacementType Type;
+	var string Path;
+	var bool bAbstract;
 };
 
 //**********************************************************************************
@@ -74,6 +96,8 @@ var array<HashedMutatorInfo> HashedMutators;
 var array<HashedWeaponInfo> HashedWeapons;
 var array<HashedAmmoInfo> HashedAmmos;
 
+var array<KnownClassInfo> KnownClasses;
+
 // UI
 var() string DialogNameColor;
 var() string DialogGoodColor;
@@ -81,6 +105,8 @@ var() string DialogBadColor;
 
 // Localization
 var localized string ProfileTitle;
+var localized string NameSuffixAbstract;
+
 var localized string MessageErrors;
 var localized string MessageClassReplacedBy;
 var localized string MessageClassReplacedDefault;
@@ -124,15 +150,18 @@ function Kill()
 	bInitialized = false;
 }
 
+public function bool AllLoaded()
+{
+	return bAllLoaded && CachedDataLists.Length != DataLists.Length;
+}
+
 public function bool LoadAll()
 {
 	local DataStoreClient DSC;
-	local string dump;
-	local array<string> Classes;
 	local int i;
 	local array<SublistInfo> SubLists;
 
-	if (bAllLoaded && CachedDataLists.Length == DataLists.Length)
+	if (AllLoaded())
 		return true;
 
 	DSC = class'UIInteraction'.static.GetDataStoreClient();
@@ -152,23 +181,12 @@ public function bool LoadAll()
 	CachedDataLists = DataLists;
 	for (i=0; i<CachedDataLists.Length; i++)
 	{
-		PreLoadClasses(CachedDataLists[i].PreLoad);
+		SubLists.Length = 0;
+		if (InternalLoadList(SubLists, CachedDataLists[i].ListName, CachedDataLists[i].Type))
+		{
+			CachedDataLists[i].SubLists = SubLists;
+		}
 	}
-
-	//@TODO: activate loading all classes/types
-
-	//if (!GetClassesDump(dump))
-	//	return false;
-
-	//ParseStringIntoArray(dump, Classes, Chr(10), true);
-	//for (i=0; i<CachedDataLists.Length; i++)
-	//{
-	//	markups.Length = 0;
-	//	if (InternalLoadList(SubLists, Classes, CachedDataLists[i].ListName, CachedDataLists[i].BaseClassName, CachedDataLists[i].BasePrefix))
-	//	{
-	//		CachedDataLists[i].SubLists = SubLists;
-	//	}
-	//}
 
 	InternalLoadWeapons();
 	
@@ -389,9 +407,19 @@ static function bool GetFriendlyNameOfPickupClass(class cls, out string out_prop
 	local class<Inventory> Inv;
 	local class<UTItemPickupFactory> Fac;
 	local class<UTWeaponLocker> Locker;
+	local class<UTVehicle> Vec;
+	local class<UTVehicleWeapon> VecGunClass;
 	local string str;
 
-	Inv = class<Inventory>(cls);
+	if (class<PickupFactory>(cls) != none)
+	{
+		Inv = class<PickupFactory>(cls).default.InventoryType;
+	}
+	else
+	{
+		Inv = class<Inventory>(cls);
+	}
+
 	if (Inv != none)
 	{
 		str = Inv.default.PickupMessage;
@@ -439,6 +467,31 @@ static function bool GetFriendlyNameOfPickupClass(class cls, out string out_prop
 	if (Locker != none)
 	{
 		str = Locker.default.LockerString;
+	}
+
+	if (class<UTVehicleFactory>(cls) != none)
+	{
+		Vec = class<UTVehicle>(DynamicLoadObject(class<UTVehicleFactory>(cls).default.VehicleClassPath, Class'class'));
+		if (Vec != none)
+		{
+			str = Vec.default.VehicleNameString;
+			if (str == class'UTVehicle'.default.VehicleNameString)
+			{
+				if (Vec.default.Seats.Length > 0)
+				{
+					VecGunClass = Vec.default.Seats[0].GunClass;
+				}
+				
+				if (VecGunClass != none)
+				{
+					str = VecGunClass.default.ItemName;
+				}
+				else
+				{
+					str = "";
+				}
+			}
+		}
 	}
 
 	if (class<Actor>(cls) != none && str == "")
@@ -526,15 +579,6 @@ public function bool GetDataStoreIndex(name ListName, name FieldName, coerce str
 	return false;
 }
 
-private function PreLoadClasses(array<string> PreLoadClasses)
-{
-	local int i;
-	for (i=0; i<PreLoadClasses.Length; i++)
-	{
-		DynamicLoadObject(PreLoadClasses[i], class'class');
-	}
-}
-
 private function InternalLoadWeapons()
 {
 	local int i;
@@ -594,67 +638,44 @@ private function InternalLoadWeapons()
 	CachedDataLists[i].SubLists = SubLists;
 }
 
-private function bool InternalLoadList(out array<SublistInfo> OutSubLists, out array<string> ClassDump, name ListName, name ClassName, string Prefix)
+private function bool InternalLoadList(out array<SublistInfo> OutSubLists, name ListName, EReplacementType Type)
 {
-	local int i, index;
-	local string findstr;
-	local string line, ClassStr;
-	local int PrefixCount, IndentCount;
+	local int i;
+	local string FriendlyName, ClassName;
 
 	local name ListNameClasses;
-	local name n;
-	local array<name> ClassNames;
-	local array<name> FriendlyNames;
+	local name ListNamePaths;
 
 	ListNameClasses = name(ListName$"_Class");
+	ListNamePaths = name(ListName$"_Path");
+
 	if (StringDataStore.GetFieldIndex(ListName) == INDEX_None)
 	{
-		findstr = Prefix$ClassName;
-		index = ClassDump.Find(findstr);
-		if (index == INDEX_NONE)
-		{
-			findstr = string(ClassName);
-			for (i=0; i<ClassDump.Length; i++)
-			{
-				ClassStr = class'UTUIScene'.static.TrimWhitespace(ClassDump[i]);
-				if (ClassStr ~= findstr)
-				{
-					PrefixCount = Len(ClassDump[i])-Len(ClassStr);
-					index = i;
-					break;
-				}
-			}
-		}
-
-		line = class'UTUIScene'.static.TrimWhitespace(ClassDump[index]);
-		PrefixCount = Len(ClassDump[index])-Len(line);
-		for (i=index+1; i<ClassDump.Length; i++)
-		{
-			ClassStr = class'UTUIScene'.static.TrimWhitespace(ClassDump[i]);
-			IndentCount = Len(ClassDump[i])-Len(ClassStr);
-			if (PrefixCount >= IndentCount)
-			{
-				break;
-			}
-
-			n = name(ClassStr);
-			ClassNames.AddItem(n);
-		}
-
 		StringDataStore.Empty(ListName, true);
 		StringDataStore.Empty(ListNameClasses, true);
+		StringDataStore.Empty(ListNamePaths, true);
 
-		FriendlyNames.Length = ClassNames.Length+1;
-		
 		// add none entry
 		StringDataStore.AddStr(ListName, "", true);
 		StringDataStore.AddStr(ListNameClasses, "", true);
+		StringDataStore.AddStr(ListNamePaths, "", true);
 
-		for(i=0; i<ClassNames.length; i++)
+		for (i=0; i<KnownClasses.Length; i++)
 		{
-			line = ""$ClassNames[i];
-			StringDataStore.AddStr(ListName, line, true);
-			StringDataStore.AddStr(ListNameClasses, ""$ClassNames[i], true);
+			if (KnownClasses[i].Type != Type) continue;
+
+			//@TODO: separate abstract classes from list
+			//@TODO: add abstract
+			if (KnownClasses[i].bAbstract) continue;
+
+			ClassName = Mid(KnownClasses[i].Path, InStr(KnownClasses[i].Path, ".")+1);
+			FriendlyName = GetPickupName(KnownClasses[i].Path, true);
+			if (KnownClasses[i].bAbstract)
+				FriendlyName $= NameSuffixAbstract;
+
+			StringDataStore.AddStr(ListName, FriendlyName, true);
+			StringDataStore.AddStr(ListNameClasses, ClassName, true);
+			StringDataStore.AddStr(ListNamePaths, KnownClasses[i].Path, true);
 		}
 	}
 
@@ -669,20 +690,14 @@ private function bool InternalLoadList(out array<SublistInfo> OutSubLists, out a
 	OutSubLists[i].Name = 'Class';
 	OutSubLists[i].FieldName = ListNameClasses;
 	OutSubLists[i].MarkupString = "<"$StringDataStore.tag$":"$ListNameClasses$">";
+
+	i = OutSubLists.Length;
+	OutSubLists.Add(1);
+	OutSubLists[i].Name = 'Path';
+	OutSubLists[i].FieldName = ListNamePaths;
+	OutSubLists[i].MarkupString = "<"$StringDataStore.tag$":"$ListNamePaths$">";
+
 	return true;
-}
-
-private function bool GetClassesDump(out string OUtClassesDump)
-{
-	local UIInteraction UIController;
-	UIController = class'UIRoot'.static.GetCurrentUIController();
-	if (UIController != none && UIController.Outer != none)
-	{
-		OutClassesDump = UIController.Outer.ConsoleCommand("obj classes");
-		return true;
-	}
-
-	return false;
 }
 
 //**********************************************************************************
@@ -778,59 +793,74 @@ static function bool ClassPathValid(string classpath)
 
 DefaultProperties
 {
-	DataLists(0)={(ListName="PowerupSelection",BaseClassName="UTPowerupPickupFactory",BasePrefix="          ",
-		PreLoad=(
-			"UTGameContent.UTDeployableEMPMine",
-			"UTGameContent.UTDeployableEnergyShield",
-			"UTGameContent.UTDeployableShapedCharge",
-			"UTGameContent.UTDeployableSlowVolume",
-			"UTGameContent.UTDeployableSpiderMineTrap",
-			"UT3Gold.UTDeployableLinkGenerator",
-			"UT3Gold.UTDeployableXRayVolume"
-		))}
-	DataLists(1)={(ListName="DeployableSelection",BaseClassName="UTDeployable",BasePrefix="            ",
-		PreLoad=(
-			"UTGameContent.UTPickupFactory_UDamage",
-			"UTGameContent.UTPickupFactory_JumpBoots",
-			"UTGameContent.UTPickupFactory_Invulnerability",
-			"UTGameContent.UTPickupFactory_Invisibility",
-			"UTGameContent.UTPickupFactory_Berserk",
-			"UT3Gold.UTPickupFactory_SlowField"
-		))}
-	DataLists(2)={(ListName="HealthSelection",BaseClassName="UTHealthPickupFactory",BasePrefix="            ",
-		PreLoad=(
-			"UTGameContent.UTPickupFactory_SuperHealth"
-		))}
-	DataLists(3)={(ListName="ArmorSelection",BaseClassName="UTArmorPickupFactory",BasePrefix="            ",
-		PreLoad=(
-			"UTGameContent.UTArmorPickup_ShieldBelt"
-		))}
-	DataLists(4)={(ListName="VehicleSelection",BaseClassName="UTVehicleFactory",BasePrefix="      ",
-		PreLoad=(
-			"UTGameContent.UTVehicleFactory_Goliath",
-			"UTGameContent.UTVehicleFactory_Cicada",
-			"UTGameContent.UTVehicleFactory_DarkWalker",
-			"UTGameContent.UTVehicleFactory_Fury",
-			"UTGameContent.UTVehicleFactory_Goliath",
-			"UTGameContent.UTVehicleFactory_HellBender",
-			"UTGameContent.UTVehicleFactory_Leviathan",
-			"UTGameContent.UTVehicleFactory_Manta",
-			"UTGameContent.UTVehicleFactory_Nemesis",
-			"UTGameContent.UTVehicleFactory_NightShade",
-			"UTGameContent.UTVehicleFactory_Paladin",
-			"UTGameContent.UTVehicleFactory_Raptor",
-			"UTGameContent.UTVehicleFactory_Scavenger",
-			"UTGameContent.UTVehicleFactory_Scorpion",
-			"UTGameContent.UTVehicleFactory_SPMA",
-			"UTGameContent.UTVehicleFactory_Viper",
-			"UT3Gold.UTVehicleFactory_Eradicator",
-			"UT3Gold.UTVehicleFactory_StealthBenderGold"
-		))}
+	KnownClasses.Add((Type=RT_Health,Path="UTGame.UTHealthPickupFactory",bAbstract=true))
+	KnownClasses.Add((Type=RT_Health,Path="UTGame.UTPickupFactory_HealthVial"))
+	KnownClasses.Add((Type=RT_Health,Path="UTGame.UTPickupFactory_MediumHealth"))
+	KnownClasses.Add((Type=RT_Health,Path="UTGameContent.UTPickupFactory_SuperHealth"))
+
+	KnownClasses.Add((Type=RT_Armor,Path="UTGame.UTArmorPickupFactory",bAbstract=true))
+	KnownClasses.Add((Type=RT_Armor,Path="UTGame.UTArmorPickup_Helmet"))
+	KnownClasses.Add((Type=RT_Armor,Path="UTGame.UTArmorPickup_Thighpads"))
+	KnownClasses.Add((Type=RT_Armor,Path="UTGame.UTArmorPickup_Vest"))
+	KnownClasses.Add((Type=RT_Armor,Path="UTGameContent.UTArmorPickup_ShieldBelt"))
+
+	KnownClasses.Add((Type=RT_Powerup,Path="UTGame.UTPowerupPickupFactory",bAbstract=true))
+	KnownClasses.Add((Type=RT_Powerup,Path="UTGameContent.UTPickupFactory_Berserk"))
+	KnownClasses.Add((Type=RT_Powerup,Path="UTGameContent.UTPickupFactory_Invisibility"))
+	KnownClasses.Add((Type=RT_Powerup,Path="UTGameContent.UTPickupFactory_Invulnerability"))
+	KnownClasses.Add((Type=RT_Powerup,Path="UTGameContent.UTPickupFactory_JumpBoots"))
+	KnownClasses.Add((Type=RT_Powerup,Path="UTGameContent.UTPickupFactory_UDamage"))
+	KnownClasses.Add((Type=RT_Powerup,Path="UT3Gold.UTPickupFactory_SlowField"))
+
+	KnownClasses.Add((Type=RT_Deployable,Path="UTGame.UTDeployable",bAbstract=true))
+	KnownClasses.Add((Type=RT_Deployable,Path="UTGameContent.UTDeployableEMPMine"))
+	KnownClasses.Add((Type=RT_Deployable,Path="UTGameContent.UTDeployableEnergyShield"))
+	KnownClasses.Add((Type=RT_Deployable,Path="UTGameContent.UTDeployableShapedCharge"))
+	KnownClasses.Add((Type=RT_Deployable,Path="UTGameContent.UTDeployableSlowVolume"))
+	KnownClasses.Add((Type=RT_Deployable,Path="UTGameContent.UTDeployableSpiderMineTrap"))
+	KnownClasses.Add((Type=RT_Deployable,Path="UTGame.UTDeployableXRayVolumeBase",bAbstract=true))
+	KnownClasses.Add((Type=RT_Deployable,Path="UT3Gold.UTDeployableLinkGenerator"))
+	KnownClasses.Add((Type=RT_Deployable,Path="UT3Gold.UTDeployableXRayVolume"))
+
+	KnownClasses.Add((Type=RT_Vehicle,Path="UTGameContent.UTVehicleFactory_Cicada"))
+	KnownClasses.Add((Type=RT_Vehicle,Path="UTGameContent.UTVehicleFactory_DarkWalker"))
+	KnownClasses.Add((Type=RT_Vehicle,Path="UTGameContent.UTVehicleFactory_Fury"))
+	KnownClasses.Add((Type=RT_Vehicle,Path="UTGameContent.UTVehicleFactory_Goliath"))
+	KnownClasses.Add((Type=RT_Vehicle,Path="UTGameContent.UTVehicleFactory_HellBender"))
+	KnownClasses.Add((Type=RT_Vehicle,Path="UTGameContent.UTVehicleFactory_Leviathan"))
+	KnownClasses.Add((Type=RT_Vehicle,Path="UTGameContent.UTVehicleFactory_Manta"))
+	KnownClasses.Add((Type=RT_Vehicle,Path="UTGameContent.UTVehicleFactory_Nemesis"))
+	KnownClasses.Add((Type=RT_Vehicle,Path="UTGameContent.UTVehicleFactory_NightShade"))
+	KnownClasses.Add((Type=RT_Vehicle,Path="UTGameContent.UTVehicleFactory_Paladin"))
+	KnownClasses.Add((Type=RT_Vehicle,Path="UTGameContent.UTVehicleFactory_Raptor"))
+	KnownClasses.Add((Type=RT_Vehicle,Path="UTGameContent.UTVehicleFactory_Scavenger"))
+	KnownClasses.Add((Type=RT_Vehicle,Path="UTGameContent.UTVehicleFactory_Scorpion"))
+	KnownClasses.Add((Type=RT_Vehicle,Path="UTGameContent.UTVehicleFactory_SPMA"))
+	//KnownClasses.Add((Type=RT_Vehicle,Path="UTGameContent.UTVehicleFactory_StealthBender"))
+	KnownClasses.Add((Type=RT_Vehicle,Path="UTGameContent.UTVehicleFactory_Viper"))
+	KnownClasses.Add((Type=RT_Vehicle,Path="UT3Gold.UTVehicleFactory_Eradicator"))
+	KnownClasses.Add((Type=RT_Vehicle,Path="UT3Gold.UTVehicleFactory_StealthBenderGold"))
+
+	//KnownClasses.Add((Type=RT_Vehicle,Path="UT3Gold.UTVehicleFactory_TrackTurretBase",bAbstract=true))
+	//KnownClasses.Add((Type=RT_Vehicle,Path="UTGameContent.UTVehicleFactory_ShieldedTurret_Rocket"))
+	//KnownClasses.Add((Type=RT_Vehicle,Path="UTGameContent.UTVehicleFactory_ShieldedTurret_Shock"))
+	//KnownClasses.Add((Type=RT_Vehicle,Path="UTGameContent.UTVehicleFactory_ShieldedTurret_Stinger"))
+	//KnownClasses.Add((Type=RT_Vehicle,Path="UTGameContent.UTVehicleFactory_Turret"))
+
+
+	DataLists(0)={(ListName="HealthSelection",Type=RT_Health,BaseClassName="UTHealthPickupFactory",BasePrefix="            ")}
+	DataLists(1)={(ListName="ArmorSelection",Type=RT_Armor,BaseClassName="UTArmorPickupFactory",BasePrefix="            ")}
+	DataLists(2)={(ListName="PowerupSelection",Type=RT_Powerup,BaseClassName="UTPowerupPickupFactory",BasePrefix="          ")}
+	DataLists(3)={(ListName="DeployableSelection",Type=RT_Deployable,BaseClassName="UTDeployable",BasePrefix="            ")}
+	DataLists(4)={(ListName="VehicleSelection",Type=RT_Vehicle,BaseClassName="UTVehicleFactory",BasePrefix="      ")}
 
 
 	DialogNameColor="R=1.0,G=1.0,B=0.5,A=1.0"
 	DialogBadColor="R=1.0,G=0.5,B=0.5,A=1"
 	DialogGoodColor="R=0.1328125,G=0.69140625,B=0.296875,A=1"
+
+	ProfileTitle="`t-Profile"
+	NameSuffixAbstract=" (All)"
 
 	MessageErrors="Some errors occurred in replacing weapons:    `errors"
 	MessageClassReplacedBy="The mutator `already is already replacing `old."

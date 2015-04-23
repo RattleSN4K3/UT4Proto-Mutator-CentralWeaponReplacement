@@ -17,7 +17,7 @@ struct LocalizedPageCaptionMap
 };
 
 var() transient localized string Title;
-var() transient localized string PreLoadingMessage;
+var() transient localized string BuildingUIMessage;
 
 var() transient localized array<LocalizedPageCaptionMap> TitlesMapping;
 var() transient array<DynamicPageInfo> DynamicPages;
@@ -25,9 +25,9 @@ var() transient array<DynamicPageInfo> DynamicPages;
 /** Reference to the main outer panel */
 var transient UISafeRegionPanel Panel;
 
-// Reference to the options page and list
-var transient UTUITabPage_DynamicOptions OptionsPage;
-var transient UTUIDynamicOptionList OptionsList;
+// OVERRIDE. Instanced instead of transient
+/** Pointer to the tab control for this scene. */
+var instanced UTUITabControl TabControl;
 
 /** Reference to the messagebox scene. */
 var transient UTUIScene_MessageBox MessageBoxReference;
@@ -44,7 +44,7 @@ event Initialized()
 
 	Panel = UISafeRegionPanel(FindChild('pnlSafeRegion',true));
 	Panel.InsertChild(TabControl);
-		
+
 	PlayerIndex = GetBestPlayerIndex();
 	for (i=0; i<DynamicPages.Length; i++)
 	{
@@ -60,14 +60,6 @@ event Initialized()
 	}
 }
 
-/** Post initialize callback */
-event PostInitialize()
-{
-	super.PostInitialize();
-
-	UIData = class'TestCWRUI'.static.GetData();
-}
-
 /** Scene activated event, sets up the title for the scene. */
 event SceneActivated(bool bInitialActivation)
 {
@@ -77,11 +69,13 @@ event SceneActivated(bool bInitialActivation)
 
 	if (bInitialActivation)
 	{
+		UIData = class'TestCWRUI'.static.GetData();
+
 		MessageBoxReference = GetMessageBoxScene();
 		if (MessageBoxReference != none)
 		{
 			MessageBoxReference.SetPotentialOptions(MessageBoxOptions);
-			MessageBoxReference.Display(PreLoadingMessage, Title);
+			MessageBoxReference.Display(BuildingUIMessage, Title);
 			LoadTimed();
 		}
 		else
@@ -93,8 +87,18 @@ event SceneActivated(bool bInitialActivation)
 
 function InitLoad()
 {
-	local int i;
 	UIData.LoadAll();
+	InitReplacements();
+
+	if (MessageBoxReference != none)
+	{
+		CloseScene(MessageBoxReference);
+	}
+}
+
+function InitReplacements()
+{
+	local int i;
 
 	// update all dynamic pages
 	for (i=0; i<DynamicPages.Length; i++)
@@ -103,11 +107,6 @@ function InitLoad()
 		{
 			DynamicPages[i].CreatedPage.LoadReplacements(UIData);
 		}
-	}
-
-	if (MessageBoxReference != none)
-	{
-		CloseScene(MessageBoxReference);
 	}
 }
 
@@ -240,7 +239,7 @@ static function UITabPage CreateNamedTabPage(UITabControl OwnerControl, class<UI
 DefaultProperties
 {
 	Title="[Central Weapon Replacement]"
-	PreLoadingMessage="Pre-loading classes. May take up to 30s"
+	BuildingUIMessage="Building UI. May take some seconds..."
 
 	TitlesMapping[0]=(Tag="Weapons",Text="Weapons")
 	TitlesMapping[1]=(Tag="Healths",Text="Health")
