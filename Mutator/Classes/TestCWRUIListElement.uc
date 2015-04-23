@@ -16,6 +16,7 @@ var instanced UILabelButton MoveDownButton;
 
 var instanced UTUIComboBox ReplacementFromCombo;
 var instanced UTUIComboBox ReplacementToCombo;
+var instanced UICheckbox ReplacementChangedCheckBox;
 var instanced UIPanel ReplacementPanel;
 
 delegate OnReorder(UIObject CreatedWidget, bool bUp);
@@ -31,8 +32,10 @@ event Initialized()
 	InsertChild(ReplacementPanel);
 	ReplacementPanel.InsertChild(ReplacementFromCombo);
 	ReplacementPanel.InsertChild(ReplacementToCombo);
+	ReplacementPanel.InsertChild(ReplacementChangedCheckBox);
 	RemoveChild(ReplacementFromCombo);
 	RemoveChild(ReplacementToCombo);
+	RemoveChild(ReplacementChangedCheckBox);
 }
 
 event PostInitialize()
@@ -104,6 +107,8 @@ event PostInitialize()
 
 	ReplacementFromCombo.ComboEditbox.StringRenderComponent.SetAlignment(UIORIENT_Horizontal, UIALIGN_Left);
 	ReplacementToCombo.ComboEditbox.StringRenderComponent.SetAlignment(UIORIENT_Vertical, UIALIGN_Center);
+
+	ReplacementChangedCheckBox.SetEnabled(false);
 
 	ReplacementFromCombo.OnValueChanged = OnReplacementFrom_ValueChanged;
 
@@ -181,6 +186,8 @@ function SwitchMode(bool bSimple, optional bool bNew)
 	MoveUpButton.SetVisibility(!bSimple && !bNew);
 	MoveDownButton.SetVisibility(!bSimple && !bNew);
 
+	ReplacementChangedCheckBox.SetVisibility(!bSimple && !bNew);
+
 	if (bSimple)
 	{
 		ReplacementPanel.SetDockParameters(UIFACE_Left, AddButton, UIFACE_Left, 0);
@@ -220,6 +227,11 @@ function SetReplacementIndexFrom(int index)
 function SetReplacementIndexTo(int index)
 {
 	ReplacementToCombo.SetSelectionIndex(index);
+}
+
+function SetReplacementOptions(bool bChanged)
+{
+	ReplacementChangedCheckBox.SetValue(bChanged);
 }
 
 DefaultProperties
@@ -316,6 +328,19 @@ DefaultProperties
 				ScaleType[UIFACE_Bottom]=EVALPOS_PercentageOwner)}
 	End Object
 	ReplacementToCombo=ReplacementComboToTemplate
+
+	// Options Changed Checkbox 
+	Begin Object Class=UICheckbox Name=ReplacementChangedTemplate
+		WidgetTag=cchkReplacementChanged
+
+		Position={( Value[UIFACE_Left]=0.475,
+				ScaleType[UIFACE_Left]=EVALPOS_PercentageOwner,
+				Value[UIFACE_Right]=0.05,
+				ScaleType[UIFACE_Right]=EVALPOS_PercentageOwner,
+				Value[UIFACE_Bottom]=1.0,
+				ScaleType[UIFACE_Bottom]=EVALPOS_PercentageOwner)}
+	End Object
+	ReplacementChangedCheckBox=ReplacementChangedTemplate
 
 	Begin Object Class=UILabelButton Name=MoveUpButtonTemplate
 		WidgetTag=bntMoveUp

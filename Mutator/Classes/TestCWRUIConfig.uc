@@ -67,6 +67,7 @@ event SceneActivated(bool bInitialActivation)
 		MessageBoxReference = GetMessageBoxScene();
 		if (MessageBoxReference != none)
 		{
+			MessageBoxOptions.Length = 0;
 			MessageBoxReference.SetPotentialOptions(MessageBoxOptions);
 			MessageBoxReference.Display(BuildingUIMessage, Title);
 			LoadTimed();

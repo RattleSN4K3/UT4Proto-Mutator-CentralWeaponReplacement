@@ -57,7 +57,7 @@ struct ReplacementSpawnInfo
 
 struct ReplacementOptionsInfo
 {
-	/** Whether to not replace/remove the weapon */
+	/** Whether to not replace/remove the pickup */
 	var bool bNoReplaceWeapon;
 	/** Whether to add the inventory item to the default inventory (on spawn) */
 	var bool bAddToDefault;

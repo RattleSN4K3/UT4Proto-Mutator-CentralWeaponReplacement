@@ -6,6 +6,9 @@ var const int MAX_RANDOM_NUMBER;
 
 var() bool bMinimalMode;
 
+var() string OptionsScenePath;
+var TestCWRUIDialogOptions OptionsScene;
+
 var transient array<TestCWRUIListElement> ReplacementElements;
 var transient array<ReplacementInfoEx> CurrentReplacements;
 
@@ -24,6 +27,8 @@ var transient TestCWRUI UIData;
 // Localization
 var() transient localized string SwitchSimpleMode;
 var() transient localized string SwitchAdvancedMode;
+var() transient localized string DialogOptionsTitle;
+var() transient localized string NoneReplacementName;
 
 event Initialized()
 {
@@ -49,11 +54,7 @@ event PostInitialize()
 function SetupButtonBar(UTUIButtonBar ButtonBar)
 {
 	ButtonBar.AppendButton(bMinimalMode ? SwitchAdvancedMode : SwitchSimpleMode, OnButtonBar_SwitchMode);
-
-	//ButtonBar.AppendButton("New Elements", OnButtonBar_Test);
-	ButtonBar.AppendButton("Add new element", OnButtonBar_Test2);
-	ButtonBar.AppendButton("Refresh", OnButtonBar_TestRefresh);
-	ButtonBar.AppendButton("Refresh elements", OnButtonBar_TestRefreshElements);
+	ButtonBar.AppendButton("<Strings:UTGameUI.ButtonCallouts.ClearAll>", OnButtonBar_ClearAll);
 }
 
 public function SetTitle(string InTitle)
@@ -83,7 +84,6 @@ public function SaveReplacements()
 	local ReplacementInfoEx RepInfo, EmptyInfo;
 	local array<ReplacementInfoEx> Replacements;
 
-	//UpdateReplacements();
 	for (i=0; i<ReplacementElements.Length; i++)
 	{
 		RepInfo = EmptyInfo;
@@ -96,49 +96,18 @@ public function SaveReplacements()
 	class'TestCentralWeaponReplacement'.static.SetConfigReplacements(ReplacementType, Replacements);
 }
 
-/** Buttonbar Test Callback. */
-function bool OnButtonBar_Test(UIScreenObject InButton, int InPlayerIndex)
+/** Buttonbar ClearAll Callback. */
+function bool OnButtonBar_ClearAll(UIScreenObject InButton, int InPlayerIndex)
 {
-	SetupOptionBindings();
-	return true;
-}
+	// clear options
+	DynOptionList.DynamicOptionTemplates.Length = 0;
+	BaseOptions.Length = 0;
+	CurrentReplacements.Length = 0;
 
-/** Buttonbar Test Callback. */
-function bool OnButtonBar_Test2(UIScreenObject InButton, int InPlayerIndex)
-{
-	local DynamicMenuOption CurMenuOpt;
-	local int i;
+	AddNewEmpty();
 
-	i = DynOptionList.GeneratedObjects.Length;
-
-	CurMenuOpt.OptionName = name(""$i);
-	CurMenuOpt.FriendlyName = "Item"@i;
-	CurMenuOpt.Description = "Desc for Item"@i;
-	DynOptionList.DynamicOptionTemplates.AddItem(CurMenuOpt);
-
-	// Generate the option controls
-	i = DynOptionList.CurrentIndex;
-	DynOptionList.RefreshAllOptions();
-
-	return true;
-}
-
-/** Buttonbar Test Callback. */
-function bool OnButtonBar_TestRefresh(UIScreenObject InButton, int InPlayerIndex)
-{
-	OptionList.RegenerateOptions();
-	return true;
-}
-
-/** Buttonbar Test Callback. */
-function bool OnButtonBar_TestRefreshElements(UIScreenObject InButton, int InPlayerIndex)
-{
-	local int i;
-
-	for (i=0; i<ReplacementElements.Length; i++)
-	{
-		ReplacementElements[i].RefreshCombo();
-	}
+	// Re-Generate the option controls
+	DynOptionList.RegenerateOptions();
 
 	return true;
 }
@@ -152,10 +121,7 @@ function bool OnButtonBar_SwitchMode(UIScreenObject InButton, int InPlayerIndex)
 	DynOptionList.DynamicOptionTemplates = BaseOptions;
 
 	bMinimalMode = !bMinimalMode;
-	if (bMinimalMode ||BaseOptions.Length == 0)
-	{
-		AddNewEmpty();
-	}
+	AddNewEmpty();
 
 	// Re-Generate the option controls
 	DynOptionList.RegenerateOptions();
@@ -261,9 +227,34 @@ function SetupOptionBindings()
 
 function OnReplacement_Modify(UIObject CreatedWidget)
 {
-	local UTUIScene UTScene;
-	UTScene = UTUIScene(GetScene());
-	if (UTScene != none) UTScene.DisplayMessageBox("Modify"@CreatedWidget);
+	local TestCWRUIListElement ThisElement;
+	local UIScene StaticScene, OpenedScene;
+	local ReplacementInfoEx RepInfo;
+	local string dialogtitle;
+	local int index;
+
+	ThisElement = TestCWRUIListElement(CreatedWidget);
+	if (ThisElement == none || !RetrieveReplacementInfoFor(ThisElement, RepInfo))
+		return;
+
+	StaticScene = UIScene(DynamicLoadObject(OptionsScenePath, class'UIScene'));
+	if (StaticScene != None && GetSceneClient().InitializeScene(StaticScene,, OpenedScene) && TestCWRUIDialogOptions(OpenedScene) != none)
+	{
+		// setup vars
+		OptionsScene = TestCWRUIDialogOptions(OpenedScene);
+		OptionsScene.InitDialog(ThisElement, RepInfo.OldClassName, RepInfo.Options);
+		OptionsScene.SetSubmitDelegate(OnReplacement_OptionsSubmit);
+
+		index = ThisElement.GetReplacementIndexFrom();
+		if (index == INDEX_NONE || !UIData.GetDataStoreValue(ReplacementReference, '', index, dialogtitle))
+		{
+			dialogtitle = RepInfo.OldClassName == '' ? NoneReplacementName : string(RepInfo.OldClassName);
+		}
+		OptionsScene.SetDialogTitle(Repl(DialogOptionsTitle, "`name", dialogtitle));
+
+		// finally open scene
+		GetScene().OpenScene(OpenedScene);
+	}
 }
 
 function OnReplacement_Remove(UIObject CreatedWidget, bool bRemove)
@@ -296,11 +287,7 @@ function OnReplacement_Remove(UIObject CreatedWidget, bool bRemove)
 
 	// override current options
 	DynOptionList.DynamicOptionTemplates = BaseOptions;
-
-	if (BaseOptions.Length == 0)
-	{
-		AddNewEmpty();
-	}
+	AddNewEmpty();
 
 	// Re-Generate the option controls
 	//DynOptionList.RegenerateOptions();
@@ -355,6 +342,23 @@ function OnReplacement_NewChanged(UIObject CreatedWidget, int NewIndex, string N
 	DynOptionList.SelectItem(DynOptionList.GeneratedObjects.Length-1);
 }
 
+function OnReplacement_OptionsSubmit(UIObject InWidget, name InClassName, ReplacementOptionsInfo InOptions)
+{
+	local TestCWRUIListElement ThisElement;
+	local int index;
+
+	ThisElement = TestCWRUIListElement(InWidget);
+	if (ThisElement == none)
+		return;
+
+	index = ReplacementElements.Find(ThisElement);
+	if (index == INDEX_NONE)
+		return;
+	
+	CurrentReplacements[index].Options = InOptions;
+	PopulateReplacementOptionsFor(ThisElement, InOptions);
+}
+
 function string GetDatastoreMarkup(name ListName, name FieldName)
 {
 	local string Markup;
@@ -392,8 +396,11 @@ function AddNewEmpty()
 {
 	local DynamicMenuOption NewMenuOpt;
 
-	NewMenuOpt.OptionName = bMinimalMode ? 'NewItem' : GetRandomOptionName();
-	DynOptionList.DynamicOptionTemplates.AddItem(NewMenuOpt);
+	if (bMinimalMode || BaseOptions.Length == 0)
+	{
+		NewMenuOpt.OptionName = bMinimalMode ? 'NewItem' : GetRandomOptionName();
+		DynOptionList.DynamicOptionTemplates.AddItem(NewMenuOpt);
+	}
 }
 
 function ReplacementReorder(int ThisIndex, int SwapIndex)
@@ -459,13 +466,14 @@ function PopulateReplacementInfoFor(TestCWRUIListElement element, ReplacementInf
 		element.SetReplacementIndexTo(index);
 	}
 
-	//@TODO: options
+	PopulateReplacementOptionsFor(element, RepInfo.Options);
 }
 
 function bool RetrieveReplacementInfoFor(TestCWRUIListElement element, out ReplacementInfoEx RepInfo)
 {
 	local int index;
 	local string ClassStr, PathStr;
+	local ReplacementOptionsInfo RefOptions;
 
 	index = element.GetReplacementIndexFrom();
 	if (index == INDEX_NONE || !UIData.GetDataStoreValue(ReplacementReference, 'Class', index, ClassStr))
@@ -482,9 +490,39 @@ function bool RetrieveReplacementInfoFor(TestCWRUIListElement element, out Repla
 	RepInfo.NewClassPath = PathStr;
 	RepInfo.OldClassName = name(ClassStr);
 
-	//@TODO: options
+	if (RetrieveReplacementOptionsFor(element, RefOptions))
+	{
+		RepInfo.Options = RefOptions;
+	}
 
 	return true;
+}
+
+function PopulateReplacementOptionsFor(TestCWRUIListElement element, ReplacementOptionsInfo RepOptions)
+{
+	local ReplacementOptionsInfo emptyoptions;	
+	element.SetReplacementOptions(emptyoptions != RepOptions);
+}
+
+function bool RetrieveReplacementOptionsFor(TestCWRUIListElement element, out ReplacementOptionsInfo RepOptions)
+{
+	local int index;
+
+	//@TODO: store and retrieve options from UI element?
+
+	index = ReplacementElements.Find(element);
+	if (index != INDEX_NONE && index < CurrentReplacements.Length)
+	{
+		RepOptions = CurrentReplacements[index].Options;
+		return true;
+	}
+
+	//if (element.GetReplacementOptions(RepOptions))
+	//{
+	//	return true;
+	//}
+
+	return false;
 }
 
 DefaultProperties
@@ -495,6 +533,10 @@ DefaultProperties
 
 	SwitchSimpleMode="SIMPLE"
 	SwitchAdvancedMode="ADVANCED"
+	DialogOptionsTitle="Options for `name replacement"
+	NoneReplacementName="None"
+
+	OptionsScenePath="TestCWRContent.UI.DialogOptions"
 
 	// Option list
 	Begin Object Class=UTUIDynamicOptionList Name=lstOptions

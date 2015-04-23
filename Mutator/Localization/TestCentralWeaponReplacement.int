@@ -29,6 +29,12 @@ TitlesMapping[4]=(Tag="Deployables",Text="Deployables")
 TitlesMapping[5]=(Tag="Vehicles",Text="Vehicles")
 TitlesMapping[6]=(Tag="Customs",Text="Customs")
 
+[TestCWRUITabList]
+SwitchSimpleMode=SIMPLE
+SwitchAdvancedMode=ADVANCED
+DialogOptionsTitle=Options for `name replacement
+NoneReplacementName=None
+
 [Titles]
 Weapons=Weapons
 Healths=Health
