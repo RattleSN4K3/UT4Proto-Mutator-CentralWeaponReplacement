@@ -22,13 +22,6 @@ var() transient localized string BuildingUIMessage;
 var() transient localized array<LocalizedPageCaptionMap> TitlesMapping;
 var() transient array<DynamicPageInfo> DynamicPages;
 
-/** Reference to the main outer panel */
-var transient UISafeRegionPanel Panel;
-
-// OVERRIDE. Instanced instead of transient
-/** Pointer to the tab control for this scene. */
-var instanced UTUITabControl TabControl;
-
 /** Reference to the messagebox scene. */
 var transient UTUIScene_MessageBox MessageBoxReference;
 
@@ -39,23 +32,23 @@ event Initialized()
 {
 	local int i, PlayerIndex;
 	local TestCWRUITabList TabPage;
+	local UTUITabControl TempTabControl;
 
 	Super.Initialized();
 
-	Panel = UISafeRegionPanel(FindChild('pnlSafeRegion',true));
-	Panel.InsertChild(TabControl);
+	TempTabControl = UTUITabControl(FindChild('pnlTabControl', true));
 
 	PlayerIndex = GetBestPlayerIndex();
 	for (i=0; i<DynamicPages.Length; i++)
 	{
-		TabPage = TestCWRUITabList(CreateNamedTabPage(TabControl, class'TestCWRUITabList', name("pnlTabRep_"$DynamicPages[i].Tag)));
+		TabPage = TestCWRUITabList(CreateNamedTabPage(TempTabControl, class'TestCWRUITabList', name("pnlTabRep_"$DynamicPages[i].Tag)));
 		if (TabPage != none)
 		{
 			TabPage.SetTitle( Caps(GetTabString(DynamicPages[i].Tag)) );
 			TabPage.SetReplacementInfo(DynamicPages[i].ReplacementType, DynamicPages[i].DatastoreReference);
 
 			DynamicPages[i].CreatedPage = TabPage;
-			TabControl.InsertPage(TabPage, PlayerIndex);
+			TempTabControl.InsertPage(TabPage, PlayerIndex);
 		}	
 	}
 }
@@ -256,17 +249,4 @@ DefaultProperties
 	DynamicPages.Add((Tag="Deployables",ReplacementType=RT_Deployable,DatastoreReference="DeployableSelection"))
 	DynamicPages.Add((Tag="Vehicles",ReplacementType=RT_Vehicle,DatastoreReference="VehicleSelection"))
 	//DynamicPages.Add((Tag="Customs",ReplacementType=RT_Custom,DatastoreReference="CustomSelection"))
-
-
-	// TabControl
-	Begin Object Class=UTUITabControl Name=pnlTabControl
-		WidgetTag=pnlTabControl
-
-		//TabButtonBackgroundStyle=(DefaultStyleTag="TabButtonBackgroundStyle",RequiredStyleClass=class'Engine.UIStyle_Image')
-		TabButtonCaptionStyle=(DefaultStyleTag="SceneTitles01",RequiredStyleClass=class'Engine.UIStyle_Combo')
-
-		Rotation={(AnchorPosition=(Value[UIORIENT_Vertical]=-104.000923))}
-		Position={(Value[UIFACE_Top]=0.138181,Value[UIFACE_Bottom]=0.659861)}
-	End Object
-	TabControl=pnlTabControl
 }
