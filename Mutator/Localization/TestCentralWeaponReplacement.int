@@ -20,6 +20,10 @@ ErrorQuery="    Do you want to continue enabling the mutator?"
 Title="[Central Weapon Replacement]"
 BuildingUIMessage="Building UI. May take some seconds..."
 ;
+ConfirmNoOptionsMessage=You have switched to simple mode but there are replacement options set for the following pages:  `pages    By continuing saving the replacements, the options will be cleared to default. Do you want to continue?
+ConfirmNoOptionsTitle=Clear out options
+ConfirmNoOptionsButtonAccept=Continue
+;
 ; Keep Tag non-localized and only translate the Text field into the specific language
 TitlesMapping[0]=(Tag="Weapons",Text="Weapons")
 TitlesMapping[1]=(Tag="Healths",Text="Health")

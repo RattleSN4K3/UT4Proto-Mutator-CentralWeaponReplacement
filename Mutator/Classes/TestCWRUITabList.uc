@@ -13,6 +13,8 @@ var transient array<TestCWRUIListElement> ReplacementElements;
 var transient array<ReplacementInfoEx> CurrentReplacements;
 
 var array<DynamicMenuOption> BaseOptions;
+var bool bHasOptions;
+var bool bOptionsDirty;
 
 /** Used to detect when the options are being regenerated */
 var transient bool bRegeneratingOptions;
@@ -83,17 +85,26 @@ public function SaveReplacements()
 	local int i;
 	local ReplacementInfoEx RepInfo, EmptyInfo;
 	local array<ReplacementInfoEx> Replacements;
+	local ReplacementOptionsInfo EmptyOptions;
 
 	for (i=0; i<ReplacementElements.Length; i++)
 	{
 		RepInfo = EmptyInfo;
 		if (RetrieveReplacementInfoFor(ReplacementElements[i], RepInfo))
 		{
+			// clear options in simple mode
+			if (bMinimalMode) RepInfo.Options = EmptyOptions;
+
 			Replacements.AddItem(RepInfo);
 		}
 	}
 
 	class'TestCentralWeaponReplacement'.static.SetConfigReplacements(ReplacementType, Replacements);
+}
+
+public function bool IsIgnoringOptions()
+{
+	return bMinimalMode && HasOptions();
 }
 
 /** Buttonbar ClearAll Callback. */
@@ -137,6 +148,8 @@ function SetupMenuOptions()
 {
 	local DynamicMenuOption CurMenuOpt;
 	local int i;
+	local bool bInOptions;
+	local ReplacementOptionsInfo EmptyOptions;
 
 	if (DynOptionList == none)
 		return;
@@ -148,11 +161,21 @@ function SetupMenuOptions()
 	{
 		for (i=0; i<CurrentReplacements.Length; i++)
 		{
+			// check for options and force advanced mode
+			if (!bInOptions && CurrentReplacements[i].Options != EmptyOptions)
+			{
+				bInOptions = true;
+				bMinimalMode = false;
+			}
+
 			CurMenuOpt.OptionName = name(""$i);
 			CurMenuOpt.FriendlyName = ""$CurrentReplacements[i].OldClassName;
 			DynOptionList.DynamicOptionTemplates.AddItem(CurMenuOpt);
 		}
 	}
+
+	bHasOptions = bInOptions;
+	bOptionsDirty = false;
 
 	BaseOptions = DynOptionList.DynamicOptionTemplates;
 
@@ -355,6 +378,7 @@ function OnReplacement_OptionsSubmit(UIObject InWidget, name InClassName, Replac
 	if (index == INDEX_NONE)
 		return;
 	
+	bOptionsDirty = true;
 	CurrentReplacements[index].Options = InOptions;
 	PopulateReplacementOptionsFor(ThisElement, InOptions);
 }
@@ -451,6 +475,30 @@ function UpdateReplacements()
 			CurrentReplacements[i] = RepInfo;
 		}
 	}
+}
+
+function bool HasOptions()
+{
+	local int i;
+	local ReplacementOptionsInfo EmptyOptions;
+
+	if (bOptionsDirty)
+	{
+		bOptionsDirty = false;
+		bHasOptions = false;
+
+		for (i=0; i<CurrentReplacements.Length; i++)
+		{
+			// check for options
+			if (CurrentReplacements[i].Options != EmptyOptions)
+			{
+				bHasOptions = true;
+				break;
+			}
+		}
+	}
+
+	return bHasOptions;
 }
 
 function PopulateReplacementInfoFor(TestCWRUIListElement element, ReplacementInfoEx RepInfo)

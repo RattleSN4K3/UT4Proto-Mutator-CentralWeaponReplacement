@@ -19,6 +19,10 @@ struct LocalizedPageCaptionMap
 var() transient localized string Title;
 var() transient localized string BuildingUIMessage;
 
+var() transient localized string ConfirmNoOptionsMessage;
+var() transient localized string ConfirmNoOptionsTitle;
+var() transient localized string ConfirmNoOptionsButtonAccept;
+
 var() transient localized array<LocalizedPageCaptionMap> TitlesMapping;
 var() transient array<DynamicPageInfo> DynamicPages;
 
@@ -161,6 +165,28 @@ function bool HandleInputKey( const out InputEventParameters EventParms )
 /** Buttonbar Accept Callback. */
 function bool OnButtonBar_Accept(UIScreenObject InButton, int PlayerIndex)
 {
+	local array<string> MessageBoxOptions;
+	local array<string> pages;
+	local string pagesstr, str;
+
+	if (HasIgnoredOptions(pages))
+	{
+		MessageBoxReference = GetMessageBoxScene();
+		if(MessageBoxReference != none)
+		{
+			JoinArray(pages, pagesstr, "\n");
+			str = Repl(ConfirmNoOptionsMessage, "  ", "\n");
+			str = Repl(str, "`pages", pagesstr);
+
+			MessageBoxOptions.AddItem(ConfirmNoOptionsButtonAccept);
+			MessageBoxOptions.AddItem("<Strings:UTGameUI.ButtonCallouts.Cancel>");
+
+			MessageBoxReference.SetPotentialOptions(MessageBoxOptions);
+			MessageBoxReference.Display(str, ConfirmNoOptionsTitle, OnAccept_Confirm, 1);
+			return true;
+		}
+	}
+
 	OnAccept();
 	CloseScene(Self);
 
@@ -173,6 +199,21 @@ function bool OnButtonBar_Back(UIScreenObject InButton, int InPlayerIndex)
 	OnBack();
 
 	return true;
+}
+
+/**
+ * Callback for the accept confirmation dialog box.
+ *
+ * @param SelectedOption	Selected item
+ * @param PlayerIndex	Index of player that performed the action.
+ */
+function OnAccept_Confirm(UTUIScene_MessageBox MessageBox, int SelectedOption, int PlayerIndex)
+{
+	if(SelectedOption == 0)
+	{
+		OnAccept();
+		CloseScene(self);
+	}
 }
 
 /** Callback for when the user wants to back out of this screen. */
@@ -193,6 +234,23 @@ function OnAccept()
 			DynamicPages[i].CreatedPage.SaveReplacements();
 		}
 	}
+}
+
+function bool HasIgnoredOptions(out array<string> OutPages)
+{
+	local int i;
+	local string str;
+
+	for (i=0; i<DynamicPages.Length; i++)
+	{
+		if (DynamicPages[i].CreatedPage != none && DynamicPages[i].CreatedPage.IsIgnoringOptions())
+		{
+			str = GetTabString(DynamicPages[i].Tag);
+			OutPages.AddItem(str);
+		}
+	}
+
+	return OutPages.Length > 0;
 }
 
 function LoadTimed(optional float time = 2.0)
@@ -234,6 +292,10 @@ DefaultProperties
 {
 	Title="[Central Weapon Replacement]"
 	BuildingUIMessage="Building UI. May take some seconds..."
+
+	ConfirmNoOptionsMessage="You have switched to simple mode but there are replacement options set for the following pages:  `pages    By continuing saving the replacements, the options will be cleared to default. Do you want to continue?"
+	ConfirmNoOptionsTitle="Clear out options"
+	ConfirmNoOptionsButtonAccept="Continue"
 
 	TitlesMapping[0]=(Tag="Weapons",Text="Weapons")
 	TitlesMapping[1]=(Tag="Healths",Text="Health")
