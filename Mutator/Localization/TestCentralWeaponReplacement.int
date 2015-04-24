@@ -32,6 +32,7 @@ TitlesMapping[3]=(Tag="Powerups",Text="Powerups")
 TitlesMapping[4]=(Tag="Deployables",Text="Deployables")
 TitlesMapping[5]=(Tag="Vehicles",Text="Vehicles")
 TitlesMapping[6]=(Tag="Customs",Text="Customs")
+TitlesMapping[7]=(Tag="Ammo",Text="Ammo")
 
 [TestCWRUITabList]
 SwitchSimpleMode=SIMPLE
@@ -41,6 +42,7 @@ NoneReplacementName=None
 
 [Titles]
 Weapons=Weapons
+Ammos=Ammo
 Healths=Health
 Armors=Armor
 Powerups=Powerups

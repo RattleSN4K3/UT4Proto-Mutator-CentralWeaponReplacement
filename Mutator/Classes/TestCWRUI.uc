@@ -52,6 +52,7 @@ struct HashedAmmoInfo
 	var string Hash;
 	var name ClassName;
 	var string Text;
+	var string Path;
 };
 
 struct SublistInfo
@@ -189,6 +190,7 @@ public function bool LoadAll()
 	}
 
 	InternalLoadWeapons();
+	InternalLoadAmmo();
 	
 	bAllLoaded = true;
 	return true;
@@ -227,6 +229,7 @@ private function LoadWeapons()
 	local UTUIDataProvider_Weapon weapn;
 	local HashedWeaponInfo item;
 	local HashedAmmoInfo ammo;
+	local class cls;
 
 	local string str, s1, s2;
 
@@ -256,11 +259,20 @@ private function LoadWeapons()
 		s2 = Mid(weapn.AmmoClassPath, index+1);
 
 		str = Localize(s2, "PickupMessage", s1);
+		if (str == "" || Left(str, 1) == "?")
+		{
+			cls = class(DynamicLoadObject(weapn.AmmoClassPath, class'class'));
+			if (!GetFriendlyNameOfPickupClass(cls, str))
+			{
+				str = s2;
+			}
+		}
 		FixFriendlyName(str);
 
 		ammo.Hash = hash;
 		ammo.Text = str;
 		ammo.ClassName = name(s2);
+		ammo.Path = weapn.AmmoClassPath;
 
 		HashedAmmos.AddItem(ammo);
 	}
@@ -516,8 +528,13 @@ static function bool GetFriendlyNameOfPickupClass(class cls, out string out_prop
 		return true;
 	}
 
-	out_propertytext = string(cls.Name);
-	return true;
+	if (cls != none)
+	{
+		out_propertytext = string(cls.Name);
+		return true;
+	}
+
+	return false;
 }
 
 //**********************************************************************************
@@ -635,6 +652,64 @@ private function InternalLoadWeapons()
 	i = CachedDataLists.Length;
 	CachedDataLists.Add(1);
 	CachedDataLists[i].ListName = 'WeaponSelection';
+	CachedDataLists[i].SubLists = SubLists;
+}
+
+private function InternalLoadAmmo()
+{
+	local int i;
+	local name ListName;
+	local name ListNameClasses;
+	local name ListNamePaths;
+	local string FriendlyName;
+	local array<SublistInfo> SubLists;
+
+	ListName = 'AmmoSelection';
+	ListNameClasses = name(ListName$"_Class");
+	ListNamePaths = name(ListName$"_Path");
+
+	if (StringDataStore.GetFieldIndex('AmmoSelection') == INDEX_None)
+	{
+		StringDataStore.Empty(ListName, true);
+		StringDataStore.Empty(ListNameClasses, true);
+		StringDataStore.Empty(ListNamePaths, true);
+
+		// add none entry
+		StringDataStore.AddStr(ListName, "", true);
+		StringDataStore.AddStr(ListNameClasses, "", true);
+		StringDataStore.AddStr(ListNamePaths, "", true);
+
+		for (i=0; i<HashedAmmos.Length; i++)
+		{
+			FriendlyName = HashedAmmos[i].Text;
+			//if (FriendlyName == "") FriendlyName = ""$HashedWeapons[i].ClassName;
+			StringDataStore.AddStr(ListName, FriendlyName, true);
+			StringDataStore.AddStr(ListNameClasses, ""$HashedAmmos[i].ClassName, true);
+			StringDataStore.AddStr(ListNamePaths, ""$HashedAmmos[i].Path, true);
+		}
+	}
+
+	i = SubLists.Length;
+	SubLists.Add(1);
+	SubLists[i].Name = '';
+	SubLists[i].FieldName = ListName;
+	SubLists[i].MarkupString = "<"$StringDataStore.tag$":"$ListName$">";
+	
+	i = SubLists.Length;
+	SubLists.Add(1);
+	SubLists[i].FieldName = ListNameClasses;
+	SubLists[i].Name = 'Class';
+	SubLists[i].MarkupString = "<"$StringDataStore.tag$":"$ListNameClasses$">";
+
+	i = SubLists.Length;
+	SubLists.Add(1);
+	SubLists[i].FieldName = ListNamePaths;
+	SubLists[i].Name = 'Path';
+	SubLists[i].MarkupString = "<"$StringDataStore.tag$":"$ListNamePaths$">";
+
+	i = CachedDataLists.Length;
+	CachedDataLists.Add(1);
+	CachedDataLists[i].ListName = 'AmmoSelection';
 	CachedDataLists[i].SubLists = SubLists;
 }
 

@@ -304,8 +304,10 @@ DefaultProperties
 	TitlesMapping[4]=(Tag="Deployables",Text="Deployables")
 	TitlesMapping[5]=(Tag="Vehicles",Text="Vehicles")
 	TitlesMapping[6]=(Tag="Customs",Text="Customs")
+	TitlesMapping[7]=(Tag="Ammos",Text="Ammo")
 
 	DynamicPages.Add((Tag="Weapons",ReplacementType=RT_Weapon,DatastoreReference="WeaponSelection"))
+	DynamicPages.Add((Tag="Ammo",ReplacementType=RT_Ammo,DatastoreReference="AmmoSelection"))
 	DynamicPages.Add((Tag="Healths",ReplacementType=RT_Health,DatastoreReference="HealthSelection"))
 	DynamicPages.Add((Tag="Armors",ReplacementType=RT_Armor,DatastoreReference="ArmorSelection"))
 	DynamicPages.Add((Tag="Powerups",ReplacementType=RT_Powerup,DatastoreReference="PowerupSelection"))
