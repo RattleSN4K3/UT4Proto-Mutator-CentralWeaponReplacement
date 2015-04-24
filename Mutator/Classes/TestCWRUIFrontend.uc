@@ -123,7 +123,7 @@ function InitUICheck()
 	local name n;
 	local class<Mutator> mutclass;
 
-	class'TestCentralWeaponReplacement'.static.StaticPreInitialize();
+	class'TestCWRCore'.static.StaticPreInitialize();
 
 	for (i=0; i<MenuDataStore.EnabledMutators.Length; i++)
 	{
@@ -137,7 +137,7 @@ function InitUICheck()
 
 function CleanupUICheck()
 {
-	class'TestCentralWeaponReplacement'.static.StaticPreDestroy();
+	class'TestCWRCore'.static.StaticPreDestroy();
 }
 
 /** Modifies the enabled mutator array to enable/disable a mutator. */

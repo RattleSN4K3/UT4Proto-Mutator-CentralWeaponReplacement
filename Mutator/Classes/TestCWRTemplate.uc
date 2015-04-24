@@ -97,17 +97,17 @@ static private final function bool RegisterByInfo(Object Registrar, TemplateInfo
 
 static protected final function bool RegisterWeaponReplacement(Object Registrar, coerce name OldClassName, string NewClassPath, EReplacementType ReplacementType, optional ReplacementOptionsInfo ReplacementOptions, optional bool bPre, optional bool bOnlyCheck, optional out string ErrorMessage)
 {
-	return class'TestCentralWeaponReplacement'.static.StaticRegisterWeaponReplacement(Registrar, OldClassName, NewClassPath, ReplacementType, ReplacementOptions, bPre, bOnlyCheck, ErrorMessage);
+	return class'TestCWRCore'.static.StaticRegisterWeaponReplacement(Registrar, OldClassName, NewClassPath, ReplacementType, ReplacementOptions, bPre, bOnlyCheck, ErrorMessage);
 }
 
 static private final function bool Unregister(Object Registrar, optional bool bPre)
 {
-	return class'TestCentralWeaponReplacement'.static.StaticUnRegisterWeaponReplacement(Registrar, bPre);
+	return class'TestCWRCore'.static.StaticUnRegisterWeaponReplacement(Registrar, bPre);
 }
 
 static private final function Update(Object Registrar, bool bBatchOp, optional bool bPre)
 {
-	class'TestCentralWeaponReplacement'.static.StaticUpdateWeaponReplacement(Registrar, bBatchOp, bPre);
+	class'TestCWRCore'.static.StaticUpdateWeaponReplacement(Registrar, bBatchOp, bPre);
 }
 
 //**********************************************************************************

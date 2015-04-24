@@ -15,7 +15,7 @@ function bool CheckReplacement(Actor Other)
 		{
 			if (ReplaceHealthClassName != '')
 			{
-				class'TestCentralWeaponReplacement'.static.SpawnStaticActor(NewHealthClass, WorldInfo, Other.Owner,, Other.Location, Other.Rotation);
+				class'TestCWRCore'.static.SpawnStaticActor(NewHealthClass, WorldInfo, Other.Owner,, Other.Location, Other.Rotation);
 			}
 
 			// remove old factory

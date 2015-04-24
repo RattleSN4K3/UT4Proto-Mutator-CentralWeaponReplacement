@@ -47,7 +47,7 @@ function bool CheckReplacement(Actor Other)
 		{
 			if (ReplacePowerupClassName != '')
 			{
-				class'TestCentralWeaponReplacement'.static.SpawnStaticActor(NewPowerupClass, WorldInfo, Other.Owner,, Other.Location, Other.Rotation);
+				class'TestCWRCore'.static.SpawnStaticActor(NewPowerupClass, WorldInfo, Other.Owner,, Other.Location, Other.Rotation);
 			}
 
 			// remove old factory

@@ -15,7 +15,7 @@ function bool CheckReplacement(Actor Other)
 		{
 			if (ReplaceArmorClassName != '')
 			{
-				class'TestCentralWeaponReplacement'.static.SpawnStaticActor(NewArmorClass, WorldInfo, Other.Owner,, Other.Location, Other.Rotation);
+				class'TestCWRCore'.static.SpawnStaticActor(NewArmorClass, WorldInfo, Other.Owner,, Other.Location, Other.Rotation);
 			}
 
 			// remove old factory

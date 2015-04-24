@@ -15,7 +15,7 @@ function bool CheckReplacement(Actor Other)
 		{
 			if (ReplaceVehicleClassName != '')
 			{
-				class'TestCentralWeaponReplacement'.static.SpawnStaticActor(NewVehicleClass, WorldInfo, Other.Owner,, Other.Location, Other.Rotation);
+				class'TestCWRCore'.static.SpawnStaticActor(NewVehicleClass, WorldInfo, Other.Owner,, Other.Location, Other.Rotation);
 			}
 
 			// remove old factory

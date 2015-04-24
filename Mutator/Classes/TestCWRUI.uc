@@ -283,14 +283,14 @@ static function string DumpErrorInfo(ErrorMessageInfo err, optional bool NoPrefi
 	local string str;
 	if (!ClassPathValid(err.NewClassPath))
 	{
-		str = err.Registrar != none ? "`old already removed by `already" : "`old already removed by default configuration";
+		str = IsDefaultMutator(err.Registrar) ? "`old already removed by default configuration" : "`old already removed by `already";
 	}
 	else
 	{
 		str = "Unable to add `new";
-		if (err.Registrar != none) str $= " (by `mutator)";
+		if (!IsDefaultMutator(err.Registrar)) str $= " (by `mutator)";
 		str $= ". ";
-		str $= err.Conflict != none ? "`already is already replacing `old" : "`old already replaced by default configuration";
+		str $= IsDefaultMutator(err.Conflict) ? "`old already replaced by default configuration" : "`already is already replacing `old";
 	}
 
 	str = Repl(str, "`new", Mid(err.NewClassPath, Instr(err.NewClassPath, ".")+1));
@@ -306,13 +306,14 @@ function string GenerateErrorInfo(ErrorMessageInfo err, optional bool bColorize 
 	local string str;
 	if (!ClassPathValid(err.NewClassPath))
 	{
-		str = err.Registrar != none ? MessageClassRemovedBy : MessageClassRemovedDefault;
+		str = IsDefaultMutator(err.Registrar) ? MessageClassRemovedDefault : MessageClassRemovedBy;
 	}
 	else
 	{
-		str = err.Registrar != none ? MessageClassSubstBy : MessageClassSubstDefault;
+		//@TODO: correct message for default mutator being in conflict
+		str = IsDefaultMutator(err.Registrar) ? MessageClassSubstDefault : MessageClassSubstBy;
 		str $= " ";
-		str $= err.Conflict != none ? MessageClassReplacedBy : MessageClassReplacedDefault;
+		str $= IsDefaultMutator(err.Conflict) ? MessageClassReplacedDefault : MessageClassReplacedBy;
 	}
 	str = Repl(str, "`new", SubstErrorInfo(GetPickupName(err.NewClassPath, true), bColorize, DialogNameColor));
 	str = Repl(str, "`old", SubstErrorInfo(GetPickupName(err.ClassName, false), bColorize, DialogNameColor));
@@ -372,12 +373,12 @@ static private function string StaticGetObjectFriendlyName(Object obj, optional 
 			str = Repl(default.ProfileTitle, "`t", TestCWRMapProfile(Obj).ProfileName);
 	}
 	
-	if (str == "" && !NoFriendly && obj != none)
+	if (str == "" && !NoFriendly && !IsDefaultMutator(obj))
 	{
 		GetFriendlyNameOfPickupClass(obj.Class, str);
 	}
 
-	if (str == "" && Obj != none)
+	if (str == "" && !IsDefaultMutator(Obj))
 	{
 		str = PathName(class(obj) != none ? Obj : Obj.Class);
 		str = Mid(str, InStr(str, ".")+1);
@@ -390,7 +391,7 @@ private function string GetObjectFriendlyName(Object obj, optional bool NoFriend
 {
 	local string str;
 	local int index;
-	if (TestCWRMapProfile(Obj) == none && !NoFriendly && Obj != none)
+	if (TestCWRMapProfile(Obj) == none && !NoFriendly && !IsDefaultMutator(Obj))
 	{
 		index = HashedMutators.Find('Hash', Locs(PathName(class(obj) != none ? Obj : Obj.Class)));
 		if (index != INDEX_NONE && HashedMutators[index].Info != none)
@@ -703,6 +704,11 @@ private function bool InternalLoadList(out array<SublistInfo> OutSubLists, name 
 //**********************************************************************************
 // Static functions
 //**********************************************************************************
+
+static function bool IsDefaultMutator(Object Obj)
+{
+	return Obj == none || ClassIsChildOf(Obj.Class, class'TestCentralWeaponReplacement');
+}
 
 static function ShowErrorMessage(string errors, optional string Title="")
 {
