@@ -310,7 +310,6 @@ function string GenerateErrorInfo(ErrorMessageInfo err, optional bool bColorize 
 	}
 	else
 	{
-		//@TODO: correct message for default mutator being in conflict
 		str = IsDefaultMutator(err.Registrar) ? MessageClassSubstDefault : MessageClassSubstBy;
 		str $= " ";
 		str $= IsDefaultMutator(err.Conflict) ? MessageClassReplacedDefault : MessageClassReplacedBy;
@@ -373,12 +372,12 @@ static private function string StaticGetObjectFriendlyName(Object obj, optional 
 			str = Repl(default.ProfileTitle, "`t", TestCWRMapProfile(Obj).ProfileName);
 	}
 	
-	if (str == "" && !NoFriendly && !IsDefaultMutator(obj))
+	if (str == "" && !NoFriendly && Obj != none)
 	{
 		GetFriendlyNameOfPickupClass(obj.Class, str);
 	}
 
-	if (str == "" && !IsDefaultMutator(Obj))
+	if (str == "" && Obj != none)
 	{
 		str = PathName(class(obj) != none ? Obj : Obj.Class);
 		str = Mid(str, InStr(str, ".")+1);
@@ -391,7 +390,7 @@ private function string GetObjectFriendlyName(Object obj, optional bool NoFriend
 {
 	local string str;
 	local int index;
-	if (TestCWRMapProfile(Obj) == none && !NoFriendly && !IsDefaultMutator(Obj))
+	if (TestCWRMapProfile(Obj) == none && !NoFriendly)
 	{
 		index = HashedMutators.Find('Hash', Locs(PathName(class(obj) != none ? Obj : Obj.Class)));
 		if (index != INDEX_NONE && HashedMutators[index].Info != none)
@@ -707,7 +706,7 @@ private function bool InternalLoadList(out array<SublistInfo> OutSubLists, name 
 
 static function bool IsDefaultMutator(Object Obj)
 {
-	return Obj == none || ClassIsChildOf(Obj.Class, class'TestCentralWeaponReplacement');
+	return Obj == none || class<TestCentralWeaponReplacement>(Obj) != none || TestCentralWeaponReplacement(Obj) != none;
 }
 
 static function ShowErrorMessage(string errors, optional string Title="")
