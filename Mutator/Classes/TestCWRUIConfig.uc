@@ -403,6 +403,7 @@ function ToggleAmmoTab(optional bool bForceHide)
 		if (DynamicPages[AmmoIdx].CreatedPage != none)
 		{
 			TabControl.RemovePage(DynamicPages[AmmoIdx].CreatedPage, GetBestPlayerIndex());
+			DynamicPages[AmmoIdx].CreatedPage = none;
 		}
 	}
 	else
