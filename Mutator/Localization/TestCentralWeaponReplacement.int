@@ -18,11 +18,22 @@ ErrorQuery="    Do you want to continue enabling the mutator?"
 
 [TestCWRUIConfig]
 Title="[Central Weapon Replacement]"
-BuildingUIMessage="Building UI. May take some seconds..."
+BuildingUIMessage=Building UI. May take some seconds...
 ;
-ConfirmNoOptionsMessage=You have switched to simple mode but there are replacement options set for the following pages:  `pages    By continuing saving the replacements, the options will be cleared to default. Do you want to continue?
+ConfirmNoOptionsMessage=You have switched to simple mode but there are replacement options set for the following pages:\n`pages\n\nBy continuing saving the replacements, the options will be cleared to default. Do you want to continue?
 ConfirmNoOptionsTitle=Clear out options
 ConfirmNoOptionsButtonAccept=Continue
+;
+CustomAmmoReplacementMessage=By enabling custom ammo replacement, you have to either transfer all the ammo replacements from the current weapon replacement or setup your own replacements.\n\nNo ammo pickups will be replaced automatically by whatever weapon you choose to be replaced.
+CustomAmmoReplacementTitle=Custom ammo replacment
+;
+ConfirmHideAmmoMessage=You made changes to the ammo replacements. By switching back to simple ammo replacement (based on the selected weapons), you will loose any made changes to the ammo replacements.\n\nDo you want to ignore these changes and switch to simple ammo replacement?
+ConfirmHideAmmoTitle=Ignore custom replacements?
+ConfirmHideAmmoButtonAccept=Ignore
+;
+ShowAmmoCaption=CUSTOM AMMO
+HideAmmoCaption=SIMPLE AMMO
+TransferAmmoCaption=TRANSFER AMMO
 ;
 ; Keep Tag non-localized and only translate the Text field into the specific language
 TitlesMapping[0]=(Tag="Weapons",Text="Weapons")

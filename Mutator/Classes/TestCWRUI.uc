@@ -596,6 +596,32 @@ public function bool GetDataStoreIndex(name ListName, name FieldName, coerce str
 	return false;
 }
 
+public function bool GetAmmoInfoForWeapon(coerce string WeaponClassString, optional out string OutPath, optional out name OutClassName)
+{
+	local int index;
+	local name ClassName;
+
+	if (InStr(WeaponClassString, ".") == INDEX_NONE)
+	{
+		ClassName = name(WeaponClassString);
+		index = HashedWeapons.Find('ClassName', ClassName);
+	}
+	else
+	{
+		WeaponClassString = Locs(WeaponClassString);
+		index = HashedWeapons.Find('Hash', WeaponClassString);
+	}
+	
+	if (index != INDEX_NONE && HashedWeapons[index].Info.AmmoClassPath != "")
+	{
+		OutPath = HashedWeapons[index].Info.AmmoClassPath;
+		OutClassName = name(Mid(OutPath, InStr(OutPath, ".")+1));
+		return true;
+	}
+
+	return false;
+}
+
 private function InternalLoadWeapons()
 {
 	local int i;

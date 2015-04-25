@@ -6,6 +6,9 @@ struct DynamicPageInfo
 	var EReplacementType ReplacementType;
 	var name DatastoreReference;
 
+	var bool Hidden;
+	var name After;
+
 	// Runtime
 	var transient TestCWRUITabList CreatedPage;
 };
@@ -23,6 +26,17 @@ var() transient localized string ConfirmNoOptionsMessage;
 var() transient localized string ConfirmNoOptionsTitle;
 var() transient localized string ConfirmNoOptionsButtonAccept;
 
+var() transient localized string ConfirmHideAmmoMessage;
+var() transient localized string ConfirmHideAmmoTitle;
+var() transient localized string ConfirmHideAmmoButtonAccept;
+
+var() transient localized string CustomAmmoReplacementMessage;
+var() transient localized string CustomAmmoReplacementTitle;
+
+var() transient localized string ShowAmmoCaption;
+var() transient localized string HideAmmoCaption;
+var() transient localized string TransferAmmoCaption;
+
 var() transient localized array<LocalizedPageCaptionMap> TitlesMapping;
 var() transient array<DynamicPageInfo> DynamicPages;
 
@@ -31,29 +45,24 @@ var transient UTUIScene_MessageBox MessageBoxReference;
 
 var transient TestCWRUI UIData;
 
+var bool bAmmoVisible;
+var bool bAmmoInfoShown;
+
 /** Initialize callback */
 event Initialized()
 {
-	local int i, PlayerIndex;
-	local TestCWRUITabList TabPage;
+	local int i;
 	local UTUITabControl TempTabControl;
 
 	Super.Initialized();
 
 	TempTabControl = UTUITabControl(FindChild('pnlTabControl', true));
 
-	PlayerIndex = GetBestPlayerIndex();
 	for (i=0; i<DynamicPages.Length; i++)
 	{
-		TabPage = TestCWRUITabList(CreateNamedTabPage(TempTabControl, class'TestCWRUITabList', name("pnlTabRep_"$DynamicPages[i].Tag)));
-		if (TabPage != none)
-		{
-			TabPage.SetTitle( Caps(GetTabString(DynamicPages[i].Tag)) );
-			TabPage.SetReplacementInfo(DynamicPages[i].ReplacementType, DynamicPages[i].DatastoreReference);
+		if (DynamicPages[i].Hidden) continue;
 
-			DynamicPages[i].CreatedPage = TabPage;
-			TempTabControl.InsertPage(TabPage, PlayerIndex);
-		}	
+		DynamicPages[i].CreatedPage = CreateReplacementTab(TempTabControl, DynamicPages[i]);
 	}
 }
 
@@ -123,6 +132,8 @@ function SetTitle()
 /** Setup the scene's button bar. */
 function SetupButtonBar()
 {
+	local int index;
+
 	if(ButtonBar != None)
 	{
 		ButtonBar.Clear();
@@ -131,6 +142,25 @@ function SetupButtonBar()
 
 		if(TabControl != None && UTTabPage(TabControl.ActivePage) != none)
 		{
+			if (bAmmoVisible)
+			{
+				index = DynamicPages.Find('Tag', 'Ammo');
+				if (index != INDEX_NONE && TabControl.ActivePage == DynamicPages[index].CreatedPage)
+				{
+					ButtonBar.AppendButton(HideAmmoCaption, OnButtonBar_HideAmmo);
+				}
+			}
+
+			index = DynamicPages.Find('Tag', 'Weapons');
+			if (index != INDEX_NONE && TabControl.ActivePage == DynamicPages[index].CreatedPage)
+			{
+				ButtonBar.AppendButton(bAmmoVisible ? HideAmmoCaption : ShowAmmoCaption, OnButtonBar_ShowAmmo);
+				if (bAmmoVisible)
+				{
+					ButtonBar.AppendButton(TransferAmmoCaption, OnButtonBar_TransferAmmo);
+				}
+			}
+
 			// Let the current tab page append buttons.
 			UTTabPage(TabControl.ActivePage).SetupButtonBar(ButtonBar);
 		}
@@ -201,6 +231,42 @@ function bool OnButtonBar_Back(UIScreenObject InButton, int InPlayerIndex)
 	return true;
 }
 
+/** Buttonbar ShowAmmo Callback. */
+function bool OnButtonBar_HideAmmo(UIScreenObject InButton, int InPlayerIndex)
+{
+	local array<string> MessageBoxOptions;
+
+	MessageBoxReference = GetMessageBoxScene();
+	if(MessageBoxReference != none)
+	{
+		MessageBoxOptions.AddItem(ConfirmHideAmmoButtonAccept);
+		MessageBoxOptions.AddItem("<Strings:UTGameUI.ButtonCallouts.Cancel>");
+
+		MessageBoxReference.SetPotentialOptions(MessageBoxOptions);
+		MessageBoxReference.Display(Repl(ConfirmHideAmmoMessage, "  ", "\n"), ConfirmHideAmmoTitle, OnHideAmmo_Confirm, 1);
+		return true;
+	}
+
+	ToggleAmmoTab(true);
+	return true;
+}
+
+/** Buttonbar ShowAmmo Callback. */
+function bool OnButtonBar_ShowAmmo(UIScreenObject InButton, int InPlayerIndex)
+{
+	ToggleAmmoTab();
+
+	return true;
+}
+
+/** Buttonbar TransferAmmo Callback. */
+function bool OnButtonBar_TransferAmmo(UIScreenObject InButton, int InPlayerIndex)
+{
+	TransferAmmo();
+
+	return true;
+}
+
 /**
  * Callback for the accept confirmation dialog box.
  *
@@ -213,6 +279,20 @@ function OnAccept_Confirm(UTUIScene_MessageBox MessageBox, int SelectedOption, i
 	{
 		OnAccept();
 		CloseScene(self);
+	}
+}
+
+/**
+ * Callback for the ignore ammo replacement dialog box.
+ *
+ * @param SelectedOption	Selected item
+ * @param PlayerIndex	Index of player that performed the action.
+ */
+function OnHideAmmo_Confirm(UTUIScene_MessageBox MessageBox, int SelectedOption, int PlayerIndex)
+{
+	if(SelectedOption == 0)
+	{
+		ToggleAmmoTab(true);
 	}
 }
 
@@ -233,6 +313,85 @@ function OnAccept()
 		{
 			DynamicPages[i].CreatedPage.SaveReplacements();
 		}
+	}
+}
+
+function ToggleAmmoTab(optional bool bForceHide)
+{
+	local int AmmoIdx, InsertIdx;
+	local TestCWRUITabList TabPage;
+	AmmoIdx = DynamicPages.Find('Tag', 'Ammo');
+	if (AmmoIdx == INDEX_NONE)
+		return;
+
+	if (bAmmoVisible || bForceHide)
+	{
+		bAmmoVisible = false;
+		if (DynamicPages[AmmoIdx].CreatedPage != none)
+		{
+			TabControl.RemovePage(DynamicPages[AmmoIdx].CreatedPage, GetBestPlayerIndex());
+		}
+	}
+	else
+	{
+		bAmmoVisible = true;
+		InsertIdx = DynamicPages.Find('Tag', DynamicPages[AmmoIdx].After);
+		if (InsertIdx != INDEX_NONE) InsertIdx += 1;
+		TabPage = CreateReplacementTab(TabControl, DynamicPages[AmmoIdx], InsertIdx, true);
+		if (TabPage != none)
+		{
+			DynamicPages[AmmoIdx].CreatedPage = TabPage;
+			TabPage.LoadReplacements(UIData);
+		}
+		
+		if (!bAmmoInfoShown)
+		{
+			bAmmoInfoShown = true;
+			DisplayMessageBox(Repl(CustomAmmoReplacementMessage, "  ", "\n"), CustomAmmoReplacementTitle);
+		}
+	}
+
+	SetupButtonBar();
+}
+
+function TransferAmmo()
+{
+	local int WeaponIdx, AmmoIdx;
+	local array<ReplacementInfoEx> WeaponReplacements, AmmoReplacements;
+	local ReplacementInfoEx Replacement;
+	local int i;
+	local name AmmoClassFrom;
+	local string AmmoClassTo;
+
+	WeaponIdx = DynamicPages.Find('Tag', 'Weapons');
+	AmmoIdx = DynamicPages.Find('Tag', 'Ammo');
+	if (WeaponIdx == INDEX_NONE || AmmoIdx == INDEX_NONE ||
+		DynamicPages[WeaponIdx].CreatedPage == none || DynamicPages[AmmoIdx].CreatedPage == none)
+		return;
+
+	WeaponReplacements = DynamicPages[WeaponIdx].CreatedPage.GetReplacements();
+	for (i=0; i<WeaponReplacements.Length; i++)
+	{
+		if (!UIData.GetAmmoInfoForWeapon(WeaponReplacements[i].OldClassName,, AmmoClassFrom))
+			continue;
+
+		Replacement.OldClassName = AmmoClassFrom;
+
+		if (UIData.GetAmmoInfoForWeapon(WeaponReplacements[i].NewClassPath, AmmoClassTo))
+		{
+			Replacement.NewClassPath = AmmoClassTo;
+		}
+		else
+		{
+			Replacement.NewClassPath = "";
+		}
+
+		AmmoReplacements.AddItem(Replacement);
+	}
+
+	if (AmmoReplacements.Length > 0)
+	{
+		DynamicPages[AmmoIdx].CreatedPage.AddReplacements(AmmoReplacements, true);
 	}
 }
 
@@ -280,6 +439,23 @@ function string GetTabString(name Tag)
 	 Return Localize("Titles", string(Tag), string(class.GetPackageName()));
 }
 
+function TestCWRUITabList CreateReplacementTab(UTUITabControl InTabControl, DynamicPageInfo PageInfo, optional int InsertIndex = INDEX_NONE, optional bool bSkipActivate, optional int PlayerIndex=GetBestPlayerIndex())
+{
+	local TestCWRUITabList TabPage;
+	Local name TabName;
+	TabName = name("pnlTabRep_"$PageInfo.Tag);
+	TabPage = TestCWRUITabList(CreateNamedTabPage(InTabControl, class'TestCWRUITabList', TabName));
+	if (TabPage != none)
+	{
+		TabPage.SetTitle(Caps(GetTabString(PageInfo.Tag)));
+		TabPage.SetReplacementInfo(PageInfo.ReplacementType, PageInfo.DatastoreReference);
+
+		InTabControl.InsertPage(TabPage, PlayerIndex, InsertIndex, !bSkipActivate);
+	}
+
+	return TabPage;
+}
+
 static function UITabPage CreateNamedTabPage(UITabControl OwnerControl, class<UITabPage> TabPageClass, optional name WidgetName, optional UITabPage PagePrefab )
 {
 	local UITabPage TabPage;
@@ -297,6 +473,17 @@ DefaultProperties
 	ConfirmNoOptionsTitle="Clear out options"
 	ConfirmNoOptionsButtonAccept="Continue"
 
+	CustomAmmoReplacementMessage="By enabling custom ammo replacement, you have to either transfer all the ammo replacements from the current weapon replacement or setup your own replacements.    No ammo pickups will be replaced automatically by whatever weapon you choose to be replaced."
+	CustomAmmoReplacementTitle="Custom ammo replacment"
+
+	ConfirmHideAmmoMessage="You made changes to the ammo replacements. By switching back to simple ammo replacement (based on the selected weapons), you will loose any made changes to the ammo replacements.    Do you want to ignore these changes and switch to simple ammo replacement?"
+	ConfirmHideAmmoTitle="Ignore custom replacements?"
+	ConfirmHideAmmoButtonAccept="Ignore"
+
+	ShowAmmoCaption="CUSTOM AMMO"
+	HideAmmoCaption="SIMPLE AMMO"
+	TransferAmmoCaption="TRANSFER AMMO"
+
 	TitlesMapping[0]=(Tag="Weapons",Text="Weapons")
 	TitlesMapping[1]=(Tag="Healths",Text="Health")
 	TitlesMapping[2]=(Tag="Armors",Text="Armor")
@@ -307,11 +494,11 @@ DefaultProperties
 	TitlesMapping[7]=(Tag="Ammos",Text="Ammo")
 
 	DynamicPages.Add((Tag="Weapons",ReplacementType=RT_Weapon,DatastoreReference="WeaponSelection"))
-	DynamicPages.Add((Tag="Ammo",ReplacementType=RT_Ammo,DatastoreReference="AmmoSelection"))
+	DynamicPages.Add((Tag="Ammo",ReplacementType=RT_Ammo,DatastoreReference="AmmoSelection",Hidden=true,After="Weapons"))
 	DynamicPages.Add((Tag="Healths",ReplacementType=RT_Health,DatastoreReference="HealthSelection"))
 	DynamicPages.Add((Tag="Armors",ReplacementType=RT_Armor,DatastoreReference="ArmorSelection"))
 	DynamicPages.Add((Tag="Powerups",ReplacementType=RT_Powerup,DatastoreReference="PowerupSelection"))
 	DynamicPages.Add((Tag="Deployables",ReplacementType=RT_Deployable,DatastoreReference="DeployableSelection"))
 	DynamicPages.Add((Tag="Vehicles",ReplacementType=RT_Vehicle,DatastoreReference="VehicleSelection"))
-	//DynamicPages.Add((Tag="Customs",ReplacementType=RT_Custom,DatastoreReference="CustomSelection"))
+	DynamicPages.Add((Tag="Customs",ReplacementType=RT_Custom,DatastoreReference="CustomSelection",Hidden=true))
 }

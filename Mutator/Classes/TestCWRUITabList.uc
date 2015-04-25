@@ -77,6 +77,11 @@ public function SetReplacementInfo(EReplacementType type, name DataStoreReferenc
 public function LoadReplacements(TestCWRUI InDataRef)
 {
 	UIData = InDataRef;
+
+	// load specific replacements
+	class'TestCentralWeaponReplacement'.static.GetConfigReplacements(ReplacementType, CurrentReplacements);
+
+	// build options for replacements
 	SetupMenuOptions();
 }
 
@@ -100,6 +105,38 @@ public function SaveReplacements()
 	}
 
 	class'TestCentralWeaponReplacement'.static.SetConfigReplacements(ReplacementType, Replacements);
+}
+
+public function array<ReplacementInfoEx> GetReplacements()
+{
+	UpdateReplacements();
+	return CurrentReplacements;
+}
+
+public function AddReplacements(array<ReplacementInfoEx> Replacements, optional bool bInsert)
+{
+	local int i, index;
+	local bool bChanged;
+
+	UpdateReplacements();
+
+	for (i=0; i<Replacements.Length; i++)
+	{
+		if (HasReplacement(CurrentReplacements, Replacements[i]))
+			continue;
+
+		bChanged = true;
+
+		if (bInsert)
+			CurrentReplacements.InsertItem(index++, Replacements[i]);
+		else
+			CurrentReplacements.AddItem(Replacements[i]);
+	}
+
+	if (bChanged)
+	{
+		SetupMenuOptions();
+	}
 }
 
 public function bool IsIgnoringOptions()
@@ -157,21 +194,18 @@ function SetupMenuOptions()
 	bRegeneratingOptions = True;
 	DynOptionList.DynamicOptionTemplates.Length = 0;
 
-	if (class'TestCentralWeaponReplacement'.static.GetConfigReplacements(ReplacementType, CurrentReplacements))
+	for (i=0; i<CurrentReplacements.Length; i++)
 	{
-		for (i=0; i<CurrentReplacements.Length; i++)
+		// check for options and force advanced mode
+		if (!bInOptions && CurrentReplacements[i].Options != EmptyOptions)
 		{
-			// check for options and force advanced mode
-			if (!bInOptions && CurrentReplacements[i].Options != EmptyOptions)
-			{
-				bInOptions = true;
-				bMinimalMode = false;
-			}
-
-			CurMenuOpt.OptionName = name(""$i);
-			CurMenuOpt.FriendlyName = ""$CurrentReplacements[i].OldClassName;
-			DynOptionList.DynamicOptionTemplates.AddItem(CurMenuOpt);
+			bInOptions = true;
+			bMinimalMode = false;
 		}
+
+		CurMenuOpt.OptionName = name(""$i);
+		CurMenuOpt.FriendlyName = ""$CurrentReplacements[i].OldClassName;
+		DynOptionList.DynamicOptionTemplates.AddItem(CurMenuOpt);
 	}
 
 	bHasOptions = bInOptions;
@@ -569,6 +603,20 @@ function bool RetrieveReplacementOptionsFor(TestCWRUIListElement element, out Re
 	//{
 	//	return true;
 	//}
+
+	return false;
+}
+
+static function bool HasReplacement(out array<ReplacementInfoEx> Replacements, ReplacementInfoEx RepInfo)
+{
+	local int i;
+	for (i=0; i<Replacements.Length; i++)
+	{
+		if (Replacements[i] == RepInfo)
+		{
+			return true;
+		}
+	}
 
 	return false;
 }
