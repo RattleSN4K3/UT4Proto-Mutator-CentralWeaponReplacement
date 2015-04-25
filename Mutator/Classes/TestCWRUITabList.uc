@@ -32,6 +32,8 @@ var() transient localized string SwitchAdvancedMode;
 var() transient localized string DialogOptionsTitle;
 var() transient localized string NoneReplacementName;
 
+delegate OnExtraSave(TestCWRUITabList RefTab);
+
 event Initialized()
 {
 	Super.Initialized();
@@ -105,6 +107,8 @@ public function SaveReplacements()
 	}
 
 	class'TestCentralWeaponReplacement'.static.SetConfigReplacements(ReplacementType, Replacements);
+
+	OnExtraSave(self);
 }
 
 public function array<ReplacementInfoEx> GetReplacements()

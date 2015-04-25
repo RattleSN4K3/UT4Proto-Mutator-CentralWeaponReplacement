@@ -64,6 +64,12 @@ event Initialized()
 
 		DynamicPages[i].CreatedPage = CreateReplacementTab(TempTabControl, DynamicPages[i]);
 	}
+
+	i = DynamicPages.Find('Tag', 'Weapons');
+	if (i != INDEX_NONE && DynamicPages[i].CreatedPage != none)
+	{
+		DynamicPages[i].CreatedPage.OnExtraSave = OnReplacementsExtraSave_Weapons;
+	}
 }
 
 /** Scene activated event, sets up the title for the scene. */
@@ -316,6 +322,19 @@ function OnAccept()
 	}
 }
 
+function OnReplacementsExtraSave_Weapons(TestCWRUITabList RefTab)
+{
+	local array<ReplacementInfoEx> WeaponReplacements, AmmoReplacements;
+	
+	if (!bAmmoVisible)
+	{
+		WeaponReplacements = RefTab.GetReplacements();
+		AmmoReplacements = GetAmmoBasicReplacementsFor(WeaponReplacements);
+
+		class'TestCentralWeaponReplacement'.static.SetConfigReplacements(RT_Ammo, AmmoReplacements);
+	}
+}
+
 function ToggleAmmoTab(optional bool bForceHide)
 {
 	local int AmmoIdx, InsertIdx;
@@ -358,10 +377,6 @@ function TransferAmmo()
 {
 	local int WeaponIdx, AmmoIdx;
 	local array<ReplacementInfoEx> WeaponReplacements, AmmoReplacements;
-	local ReplacementInfoEx Replacement;
-	local int i;
-	local name AmmoClassFrom;
-	local string AmmoClassTo;
 
 	WeaponIdx = DynamicPages.Find('Tag', 'Weapons');
 	AmmoIdx = DynamicPages.Find('Tag', 'Ammo');
@@ -370,6 +385,22 @@ function TransferAmmo()
 		return;
 
 	WeaponReplacements = DynamicPages[WeaponIdx].CreatedPage.GetReplacements();
+	AmmoReplacements = GetAmmoBasicReplacementsFor(WeaponReplacements);
+
+	if (AmmoReplacements.Length > 0)
+	{
+		DynamicPages[AmmoIdx].CreatedPage.AddReplacements(AmmoReplacements, true);
+	}
+}
+
+function array<ReplacementInfoEx> GetAmmoBasicReplacementsFor(array<ReplacementInfoEx> WeaponReplacements)
+{
+	local ReplacementInfoEx Replacement;
+	local int i;
+	local name AmmoClassFrom;
+	local string AmmoClassTo;
+	local array<ReplacementInfoEx> Replacements;
+
 	for (i=0; i<WeaponReplacements.Length; i++)
 	{
 		if (!UIData.GetAmmoInfoForWeapon(WeaponReplacements[i].OldClassName,, AmmoClassFrom))
@@ -386,13 +417,10 @@ function TransferAmmo()
 			Replacement.NewClassPath = "";
 		}
 
-		AmmoReplacements.AddItem(Replacement);
+		Replacements.AddItem(Replacement);
 	}
 
-	if (AmmoReplacements.Length > 0)
-	{
-		DynamicPages[AmmoIdx].CreatedPage.AddReplacements(AmmoReplacements, true);
-	}
+	return Replacements;
 }
 
 function bool HasIgnoredOptions(out array<string> OutPages)
