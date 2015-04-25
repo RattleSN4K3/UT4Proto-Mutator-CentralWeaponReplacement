@@ -165,7 +165,7 @@ function InitReplacements()
 	// add ammo tab if custom ammo replacements are found
 	AmmoIdx = DynamicPages.Find('Tag', 'Ammo');
 	if (bCustomAmmo && AmmoIdx != INDEX_NONE)
-	{		
+	{
 		bAmmoVisible = true;
 		InsertIdx = DynamicPages.Find('Tag', DynamicPages[AmmoIdx].After);
 		if (InsertIdx != INDEX_NONE) InsertIdx += 1;
@@ -406,7 +406,7 @@ function ToggleAmmoTab(optional bool bForceHide)
 			DynamicPages[AmmoIdx].CreatedPage = none;
 		}
 	}
-	else
+	else if (DynamicPages[AmmoIdx].CreatedPage == none)
 	{
 		bAmmoVisible = true;
 		InsertIdx = DynamicPages.Find('Tag', DynamicPages[AmmoIdx].After);
@@ -416,12 +416,12 @@ function ToggleAmmoTab(optional bool bForceHide)
 		{
 			DynamicPages[AmmoIdx].CreatedPage = TabPage;
 			TabPage.LoadReplacements(UIData);
-		}
-		
-		if (!bAmmoInfoShown)
-		{
-			bAmmoInfoShown = true;
-			DisplayMessageBox(Repl(CustomAmmoReplacementMessage, "  ", "\n"), CustomAmmoReplacementTitle);
+
+			if (!bAmmoInfoShown)
+			{
+				bAmmoInfoShown = true;
+				DisplayMessageBox(Repl(CustomAmmoReplacementMessage, "  ", "\n"), CustomAmmoReplacementTitle);
+			}
 		}
 	}
 

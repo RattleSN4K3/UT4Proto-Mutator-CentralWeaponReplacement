@@ -27,6 +27,7 @@ var transient TestCWRUI UIData;
 
 
 // Localization
+var() transient localized string ClearReplacements;
 var() transient localized string SwitchSimpleMode;
 var() transient localized string SwitchAdvancedMode;
 var() transient localized string DialogOptionsTitle;
@@ -58,7 +59,7 @@ event PostInitialize()
 function SetupButtonBar(UTUIButtonBar ButtonBar)
 {
 	ButtonBar.AppendButton(bMinimalMode ? SwitchAdvancedMode : SwitchSimpleMode, OnButtonBar_SwitchMode);
-	ButtonBar.AppendButton("<Strings:UTGameUI.ButtonCallouts.ClearAll>", OnButtonBar_ClearAll);
+	ButtonBar.AppendButton(ClearReplacements, OnButtonBar_Clear);
 }
 
 public function SetTitle(string InTitle)
@@ -148,8 +149,8 @@ public function bool IsIgnoringOptions()
 	return bMinimalMode && HasOptions();
 }
 
-/** Buttonbar ClearAll Callback. */
-function bool OnButtonBar_ClearAll(UIScreenObject InButton, int InPlayerIndex)
+/** Buttonbar Clear Callback. */
+function bool OnButtonBar_Clear(UIScreenObject InButton, int InPlayerIndex)
 {
 	// clear options
 	DynOptionList.DynamicOptionTemplates.Length = 0;
@@ -631,6 +632,7 @@ DefaultProperties
 
 	MAX_RANDOM_NUMBER=9999
 
+	ClearReplacements="CLEAR"
 	SwitchSimpleMode="SIMPLE"
 	SwitchAdvancedMode="ADVANCED"
 	DialogOptionsTitle="Options for `name replacement"

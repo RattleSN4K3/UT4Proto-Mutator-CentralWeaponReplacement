@@ -31,6 +31,7 @@ ConfirmHideAmmoMessage=You made changes to the ammo replacements. By switching b
 ConfirmHideAmmoTitle=Ignore custom replacements?
 ConfirmHideAmmoButtonAccept=IGNORE
 ;
+ClearReplacements=CLEAR
 ShowAmmoCaption=CUSTOM AMMO
 HideAmmoCaption=SIMPLE AMMO
 TransferAmmoCaption=TRANSFER AMMO
