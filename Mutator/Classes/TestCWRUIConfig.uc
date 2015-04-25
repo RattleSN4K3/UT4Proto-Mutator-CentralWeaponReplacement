@@ -111,7 +111,11 @@ function InitLoad()
 
 function InitReplacements()
 {
-	local int i;
+	local int i, AmmoIdx, InsertIdx;
+	local array<ReplacementInfoEx> ConfigWeaponReplacements, ConfigAmmoReplacements;
+	local array<ReplacementInfoEx> SimpleAmmoReplacements;
+	local ReplacementOptionsInfo EmptyOptions;
+	local bool bCustomAmmo;
 
 	// update all dynamic pages
 	for (i=0; i<DynamicPages.Length; i++)
@@ -119,6 +123,56 @@ function InitReplacements()
 		if (DynamicPages[i].CreatedPage != none)
 		{
 			DynamicPages[i].CreatedPage.LoadReplacements(UIData);
+		}
+	}
+
+	// check if config ammo replacements differ from current simple ammo replacements
+	if (class'TestCentralWeaponReplacement'.static.GetConfigReplacements(RT_Weapon, ConfigWeaponReplacements) &&
+		class'TestCentralWeaponReplacement'.static.GetConfigReplacements(RT_Ammo, ConfigAmmoReplacements))
+	{
+		for (i=0; i<ConfigAmmoReplacements.Length; i++)
+		{
+			if (ConfigAmmoReplacements[i].Options != EmptyOptions)
+			{
+				bCustomAmmo = true;
+				break;
+			}
+		}
+
+		if (!bCustomAmmo)
+		{
+			SimpleAmmoReplacements = GetAmmoBasicReplacementsFor(ConfigWeaponReplacements);
+
+			if (ConfigAmmoReplacements.Length != SimpleAmmoReplacements.Length)
+			{
+				bCustomAmmo = true;
+			}
+			else
+			{
+				for (i=0; i<SimpleAmmoReplacements.Length; i++)
+				{
+					ConfigAmmoReplacements.RemoveItem(SimpleAmmoReplacements[i]);
+				}
+
+				if (ConfigAmmoReplacements.Length > 0)
+				{
+					bCustomAmmo = true;
+				}
+			}
+		}
+	}
+
+	// add ammo tab if custom ammo replacements are found
+	AmmoIdx = DynamicPages.Find('Tag', 'Ammo');
+	if (bCustomAmmo && AmmoIdx != INDEX_NONE)
+	{		
+		bAmmoVisible = true;
+		InsertIdx = DynamicPages.Find('Tag', DynamicPages[AmmoIdx].After);
+		if (InsertIdx != INDEX_NONE) InsertIdx += 1;
+		DynamicPages[AmmoIdx].CreatedPage = CreateReplacementTab(TabControl, DynamicPages[AmmoIdx], InsertIdx, true);
+		if (DynamicPages[AmmoIdx].CreatedPage != none)
+		{
+			DynamicPages[AmmoIdx].CreatedPage.LoadReplacements(UIData);
 		}
 	}
 }
