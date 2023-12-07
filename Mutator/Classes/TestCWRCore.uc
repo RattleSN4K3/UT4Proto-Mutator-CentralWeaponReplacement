@@ -1366,21 +1366,27 @@ static function bool SpawnStaticActor(
 	optional Actor      ActorTemplate,
 	optional out Actor  NewActor)
 {
-	local bool DefaultbStatic, DefaultbNoDelete;
+	local bool matchstarted;
 
 	if (WI == none)
 		WI = class'Engine'.static.GetCurrentWorldInfo();
 
-	DefaultbStatic = ActorClass.default.bStatic;
-	DefaultbNoDelete = ActorClass.default.bNoDelete;
-
-	class'TestCWRHelper'.static.SetActorStatic(ActorClass, false);
-	class'TestCWRHelper'.static.SetActorNoDelete(ActorClass, false);
+	matchstarted = WI.bBegunPlay;
+	if (matchstarted)
+	{
+		WI.bBegunPlay = false;
+	}
 
 	NewActor = WI.Spawn(ActorClass, SpawnOwner, SpawnTag, SpawnLocation, SpawnRotation, ActorTemplate, true);
+	if (matchstarted)
+	{
+		if (NewActor != none)
+		{
+			NewActor.MatchStarting();
+		}
 
-	class'TestCWRHelper'.static.SetActorStatic(ActorClass, DefaultbStatic);
-	class'TestCWRHelper'.static.SetActorNoDelete(ActorClass, DefaultbNoDelete);
+		WI.bBegunPlay = matchstarted;
+	}
 
 	return NewActor != none;
 }
