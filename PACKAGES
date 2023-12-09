@@ -22,3 +22,6 @@ DeployableConfig TestCWR_ConfigDeployable
 VehicleConfig TestCWR_ConfigVehicle
 VehicleHoverboard TestCWR_Hoverboard
 VehicleRemove TestCWR_NoVehicle
+
+CustomRemove TestCWR_NoCustom
+CustomConfig TestCWR_ConfigCustom
